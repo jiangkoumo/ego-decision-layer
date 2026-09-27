@@ -1,6 +1,6 @@
 {
   "name": "ego-decision-layer",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "给 ego lite 的可插拔决策层：默认 System One（Jev），可换本地 / 其他 OpenAI 兼容后端；执行层带 fail-closed 护栏。",
   "author": {
     "name": "liuyuchen",

@@ -9,6 +9,8 @@ metadata:
 
 # ego-browser（路由层，由 ego-decision-layer 接管）
 
+本入口由**本地接管层**生成（非厂商文件）：停止被路由 `bash {{WIRE_SCRIPT}} --restore`；查看当前状态 `{{EGO_JEV_CLI}} --route-status`。
+
 **本文件只是路由层。完整技能正文在本机 ego lite 的当前版本里，永远是最新的：**
 
 - 技能正文：`{{EGO_SKILLS_DIR}}/SKILL.md` ← **动手前先读它**（Space/会话纪律、观测与选择器、动作、收尾与清理规则都在那儿）

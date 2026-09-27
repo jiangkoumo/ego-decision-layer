@@ -64,6 +64,7 @@ const wire = (...args) => {
 const statusRaw = () => spawnSync("bash", [WIRE, "--status-json"], { env: env(), encoding: "utf8" });
 const status = () => JSON.parse(statusRaw().stdout);
 const fileHash = (p) => createHash("sha256").update(fs.readFileSync(p)).digest("hex");
+const fileHasBlock = (p) => fs.readFileSync(p, "utf8").includes("<!-- ego-decision-layer:route begin -->");
 const snapshotTree = (dir) => {
   const out = [];
   const walk = (d) => {
@@ -154,6 +155,83 @@ console.log("\n[5] always-on 幂等与还原");
   check("--restore 后 alwaysOn 为空", s2.alwaysOn.length === 0, JSON.stringify(s2.alwaysOn));
   check("--restore 后已接管数归零", s2.summary.n === 0 && s2.dirs.every((d) => !d.wired), JSON.stringify(s2.summary));
   check("--restore 后入口回到官方软链", fs.lstatSync(ENTRY).isSymbolicLink(), "不是软链");
+}
+
+// ── [5b] --always-on --remove：只移目标块、逐字节还原、不碰接管层 ──────────
+console.log("\n[5b] always-on 定向移除");
+{
+  setup();
+  wire();                                            // 先接管，用来验证移除不动接管层
+  const a = join(root, "A.md");
+  const b = join(root, "B.md");
+  fs.writeFileSync(a, "# A\n\nbody A\n");
+  fs.writeFileSync(b, "# B\n\nbody B\n");
+  const a0 = fileHash(a), b0 = fileHash(b);
+  wire("--always-on", a);
+  wire("--always-on", b);
+  check("两个文件都插入了块", fileHasBlock(a) && fileHasBlock(b));
+  let s = status();
+  check("列表里有两个文件", s.alwaysOn.length === 2 && s.alwaysOn.includes(a) && s.alwaysOn.includes(b), JSON.stringify(s.alwaysOn));
+
+  const r = wire("--always-on", "--remove", a);
+  check("remove exit 0", r.code === 0, r.out);
+  check("A 逐字节回到初始", fileHash(a) === a0, `${fileHash(a)} vs ${a0}`);
+  check("A 里没有块了", !fileHasBlock(a));
+  check("B 的块仍在", fileHasBlock(b));
+  check("remove 打印了剩余列表", r.out.includes(b), r.out);
+  s = status();
+  check("列表只剩 B", s.alwaysOn.length === 1 && s.alwaysOn[0] === b, JSON.stringify(s.alwaysOn));
+  const c = wire("--check");
+  check("remove 不影响接管层（--check exit 0）", c.code === 0, c.out);
+  check("接管层标记仍在", fs.existsSync(join(ENTRY, ".ego-jev-overlay.json")));
+
+  const r2 = wire("--always-on", "--remove", a);
+  check("再 remove 一次 exit 0（幂等）", r2.code === 0, r2.out);
+  check("再 remove 报「无块可移」", r2.out.includes("无块可移"), r2.out);
+  check("A 仍然逐字节等于初始", fileHash(a) === a0);
+
+  const alias = wire("--always-on-remove", b);
+  check("--always-on-remove 别名可用", alias.code === 0 && !fileHasBlock(b) && fileHash(b) === b0, alias.out);
+  check("移除 B 后列表为空", status().alwaysOn.length === 0, JSON.stringify(status().alwaysOn));
+
+  const missing = wire("--always-on", "--remove", join(root, "nope.md"));
+  check("文件不存在 → exit 2", missing.code === 2, `code=${missing.code}`);
+  const noarg = wire("--always-on", "--remove");
+  check("缺参数 → exit 2", noarg.code === 2, `code=${noarg.code}`);
+
+  // 没有 .bak 的兜底路径：只删标记区 + 自带分隔空行，也要逐字节还原
+  fs.writeFileSync(a, "# A\n\nbody A\n");
+  wire("--always-on", a);
+  fs.rmSync(a + ".bak");
+  wire("--always-on", "--remove", a);
+  check("无 .bak 时也能逐字节还原（去掉分隔空行）", fileHash(a) === a0, `${fileHash(a)} vs ${a0}`);
+
+  // 我们创建的文件（只有块）：移除后文件消失，且不产生 BSD head 的噪音
+  const created = join(root, "created.md");
+  wire("--always-on", created);
+  check("created.md 由我们创建", fs.existsSync(created) && fileHasBlock(created));
+  const rc = wire("--always-on", "--remove", created);
+  check("只含块的文件移除后消失（回到本不存在的初始态）", rc.code === 0 && !fs.existsSync(created), `code=${rc.code} exists=${fs.existsSync(created)}`);
+  check("移除不报 head 错误", !/illegal line count/.test(rc.out), rc.out);
+}
+
+// ── [5c] 路由层「自知」行 + 确定性 ───────────────────────────────────────
+console.log("\n[5c] 路由层自知行");
+{
+  setup();
+  wire();
+  const text = fs.readFileSync(join(ENTRY, "SKILL.md"), "utf8");
+  check("含「本地接管层」自知行", text.includes("本入口由**本地接管层**生成"), text.split("\n").slice(0, 6).join(" | "));
+  check("自知行给出停止路由命令", text.includes("wire-agent-skills.sh") && text.includes("--restore"));
+  check("自知行给出 CLI 与 --route-status", text.includes(CLI) && text.includes("--route-status"), CLI);
+  const descLine = text.split("\n").find((l) => l.startsWith("description: ")) || "";
+  const pOpen = descLine.indexOf("多步线性");
+  const pTail = descLine.indexOf("本入口已由 ego-decision-layer 接管");
+  const pVendor = descLine.indexOf("When you need a browser");
+  check("description 位置断言仍成立（路由句整段在厂商描述之前）", pOpen >= 0 && pTail >= 0 && pVendor >= 0 && pOpen < pTail && pTail < pVendor, `open=${pOpen} tail=${pTail} vendor=${pVendor}`);
+  const before = text;
+  wire();
+  check("刷新后生成物字节不变（确定性）", fs.readFileSync(join(ENTRY, "SKILL.md"), "utf8") === before);
 }
 
 // ── [6] CLI --route-status：JSON、无凭证、无浏览器 ─────────────────────────

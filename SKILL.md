@@ -2,7 +2,7 @@
 name: ego-decision-layer
 description: 多步线性浏览器任务（连续点击、翻页、搜索表单提交、导航跳转）的默认入口：用 `ego-decision-layer` 一条命令让决策层在单个 ego-browser 进程内闭环决策（默认 System One / Jev，可换本地 OpenAI 兼容后端；browser automation / multi-step click chain / form submit / navigation），不再每步退回大模型思考。单步动作、精确 DOM/选择器、批量抓取仍走 ego-browser 原生 API；也可把官方 ego-browser 技能入口接管成路由层。当任务涉及浏览器多步操作、要写 ego-browser nodejs 脚本（await import / fetch / 凭证落盘）时读它。
 metadata:
-  version: "0.4.3"
+  version: "0.4.4"
   date: "2026-09-26"
   requires: ego-browser
 ---

@@ -7,6 +7,37 @@
 每个版本按 **新增 / 修复 / 更正 / 未验证** 分组。「更正」记的是被实测推翻的旧结论，
 不是新功能；「未验证」如实列出还没测过的边界。
 
+## 0.4.4 — 2026-09-26
+
+### 新增
+
+- **`--always-on --remove <file>`（别名 `--always-on-remove <file>`）**：把 always-on 从「全量
+  `--restore` 才能清」变成**定向往外移除**。只移除我们自己的标记块（新标记
+  `<!-- ego-decision-layer:route begin/end -->` 与历史标记），**文件其余内容逐字节不变**
+  （有 `.bak` 时按备份精确还原；没有时只删标记区及其自带分隔空行），同步从 `always-on.list`
+  去掉该文件，**绝不触碰接管层**。幂等（没有块 → exit 0「无块可移」）；文件不存在 / 缺参数 → exit 2。
+  `--check` / `--status-json` 反映新的列表。
+- **路由层「自知」行**：生成的 `ego-browser/SKILL.md` 顶部（标题下方）现在写明「本入口由
+  **本地接管层**生成（非厂商文件）：停止被路由 `bash <wire> --restore`；查看当前状态
+  `<cli> --route-status`」。模板新增 `{{EGO_JEV_CLI}}` 占位符（渲染时替换成 CLI 真实路径）；
+  description 拼法未动（位置断言不变），生成物仍确定性。
+
+### 变更
+
+- **注入面按需收缩**：本机撤掉 `~/.pi/agent/AGENTS.md` 与 `~/.claude/CLAUDE.md` 两处 always-on 块，
+  **只保留 `~/.hermes/SOUL.md`**。依据：三个 always-on 里**唯一有实测价值的常驻块是 Hermes 那处**
+  （Hermes 真实运行没加载技能就直接用了 CLI）；pi 与 Claude 两处**没有证据支持**——决策探针里
+  交互式会话在**没开 always-on** 时就是 5/5 命中（见 README「已知限制」与 `docs/WHY.md` 的探针口径）。
+  三个技能目录（`.agents` / `.claude` / `.hermes`）的同名接管层不变。
+
+### 未验证
+
+- **Claude 侧路由未测（无探针）**：撤掉 `~/.claude/CLAUDE.md` 那块之后，Claude Code 里的多步浏览器
+  任务是否仍会走 ego-decision-layer，没有测量（Hermes 那处有实测，pi/Claude 两处没有）。
+  保留的 `--always-on <file>` 仍可随时给任意文件插块。
+- 同 0.4.3：本地模型后端只用 stub 验证，未在真实本地推理服务上端到端跑过；跨域 iframe 不处理；
+  frame 祖先带缩放/旋转直接拒绝；危险词表是启发式；真实验证码 / 登录墙未测。
+
 ## 0.4.3 — 2026-09-26
 
 ### 修复

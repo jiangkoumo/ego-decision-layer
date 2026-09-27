@@ -10,7 +10,8 @@
 #
 # 用法:
 #   scripts/wire-agent-skills.sh [--dry-run] [--check] [--restore] [--if-enabled] [--ensure]
-#                                [--status-json] [--always-on FILE] [--dir DIR]... [--vendor DIR]
+#                                [--status-json] [--always-on FILE] [--always-on --remove FILE]
+#                                [--dir DIR]... [--vendor DIR]
 #
 #   （默认动作）接管 / 刷新：把已存在的 ego-browser 入口换成路由层，幂等
 #   --check       只读检查：每个目录给出结论（已接管 / 无需接管 / 漂移），并汇总三个数字
@@ -19,7 +20,10 @@
 #   --ensure      给 CLI 首跑用：接管过就静默刷新；没接管过但检测到官方入口才首跑接管一次；
 #                 两者都不是就什么都不做（见下方 EGO_JEV_NO_WIRE）
 #   --status-json 只读：把同一份路由状态输出成 JSON（给 `ego-decision-layer --route-status` 用）
-#   --always-on FILE  向 FILE 插入一段带标记的路由说明块（幂等、可 --restore 精确移除）
+#   --always-on FILE  向 FILE 插入一段带标记的路由说明块（幂等、可精确移除）
+#   --always-on --remove FILE
+#                 只从 FILE 移除我们自己的标记块（文件其余内容逐字节不变；**不动接管层**）；
+#                 别名：--always-on-remove FILE。幂等：没有块时 exit 0；文件不存在 → exit 2
 #   --dry-run     只打印会做什么，不落盘
 #
 # 退出码: 0 正常 / 1 需要处理（--check 发现漂移；或接管动作没达成） / 2 用法或环境错误
@@ -29,6 +33,7 @@
 #   EGO_JEV_VENDOR       官方技能目录，覆盖自动探测
 #   EGO_JEV_CONFIG_DIR   启用标记 / always-on 记录目录，默认 ~/.config/ego-decision-layer（环境变量名为历史名，保留）
 #   EGO_JEV_SKILL_PATH   ego-decision-layer 自己的 SKILL.md（写进路由层）
+#   EGO_JEV_CLI          ego-decision-layer CLI 路径（写进路由层的「自知」行）；默认 <仓库>/scripts/ego-decision-layer
 #   EGO_JEV_NO_WIRE      设为非空：--ensure 什么都不做（CLI 首跑接管与自愈一并关闭）
 set -uo pipefail
 
@@ -85,10 +90,18 @@ while [[ $# -gt 0 ]]; do
     --if-enabled) IF_ENABLED=1; shift ;;
     --ensure) MODE="ensure"; ENSURE=1; shift ;;
     --status-json) MODE="status"; shift ;;
-    --always-on) [[ $# -ge 2 && -n "$2" ]] || fail "--always-on 需要一个非空文件路径"; MODE="always-on"; ALWAYS_ON_FILE="$2"; shift 2 ;;
+    --always-on)
+      if [[ "${2:-}" == "--remove" ]]; then
+        [[ $# -ge 3 && -n "${3:-}" ]] || fail "--always-on --remove 需要一个非空文件路径"
+        MODE="always-on-remove"; ALWAYS_ON_FILE="$3"; shift 3
+      else
+        [[ $# -ge 2 && -n "${2:-}" ]] || fail "--always-on 需要一个非空文件路径"
+        MODE="always-on"; ALWAYS_ON_FILE="$2"; shift 2
+      fi ;;
+    --always-on-remove) [[ $# -ge 2 && -n "${2:-}" ]] || fail "--always-on-remove 需要一个非空文件路径"; MODE="always-on-remove"; ALWAYS_ON_FILE="$2"; shift 2 ;;
     --dir) [[ $# -ge 2 && -n "$2" ]] || fail "--dir 需要一个非空目录"; DIRS+=("$2"); DIRS_FIXED=1; shift 2 ;;
     --vendor) [[ $# -ge 2 && -n "$2" ]] || fail "--vendor 需要一个非空目录"; VENDOR_ARG="$2"; shift 2 ;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    -h|--help) awk 'NR==1{next} /^set -uo pipefail/{exit} {print}' "$0"; exit 0 ;;
     *) fail "未知参数: $1" ;;
   esac
 done
@@ -138,13 +151,23 @@ decision_layer_skill_path() {
   printf '%s' "未安装（直接用 ego-decision-layer CLI 即可）"
 }
 
+decision_layer_cli_path() {  # 写进路由层「自知」行的 CLI 路径（确定性；找不到就退回 PATH 里的命令名）
+  if [[ -n "${EGO_JEV_CLI:-}" ]]; then printf '%s' "$EGO_JEV_CLI"; return; fi
+  local cand
+  for cand in "$REPO_DIR/scripts/ego-decision-layer" "$HOME/.agents/skills/ego-decision-layer/scripts/ego-decision-layer"; do
+    [[ -f "$cand" ]] && { printf '%s' "$cand"; return; }
+  done
+  printf '%s' "ego-decision-layer"
+}
+
 # 生成路由层 SKILL.md 到 stdout（必须确定性：不含时间戳/随机数，否则 --check 会一直误报漂移）
 render_overlay() {
-  local desc ver date jev line desc_yaml
+  local desc ver date jev cli line desc_yaml
   desc="$(vendor_frontmatter_field description)"
   ver="$(vendor_frontmatter_field version)"
   date="$(vendor_frontmatter_field date)"
   jev="$(decision_layer_skill_path)"
+  cli="$(decision_layer_cli_path)"
   [[ -n "$desc" ]] || desc="When you need a browser, read this Skill by default（原描述读取失败，请重跑本脚本）"
   # frontmatter 是 YAML：description 用单引号标量，内部单引号翻倍，换行压成空格。
   # 不这样做的话，厂商描述里一旦出现 ": " 就会让整条技能解析失败（Agent 直接看不到这个技能）。
@@ -157,6 +180,7 @@ render_overlay() {
     line="${line//'{{EGO_SKILLS_DIR}}'/$VENDOR}"
     line="${line//'{{EGO_JEV_SKILL}}'/$jev}"
     line="${line//'{{WIRE_SCRIPT}}'/$WIRE_SCRIPT}"
+    line="${line//'{{EGO_JEV_CLI}}'/$cli}"
     printf '%s\n' "$line"
   done < "$TEMPLATE"
 }
@@ -241,6 +265,25 @@ always_on_add() {  # <file>
   { always_on_files; printf '%s\n' "$f"; } | sort -u > "$tmp" && mv "$tmp" "$ALWAYS_ON_LIST"
 }
 
+always_on_remaining() {  # stdout = 列表里仍有标记块的文件（逗号分隔；没有则「（无）」）
+  local out="" f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    file_has_block "$f" || continue
+    out="${out:+$out, }$f"
+  done < <(always_on_files)
+  printf '%s' "${out:-（无）}"
+}
+
+always_on_remove_file() {  # <file>：从 always-on.list 里去掉这个文件（其余条目原样保留）
+  local f="$1" tmp
+  [[ -f "$ALWAYS_ON_LIST" ]] || return 0
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ego-decision-layer-aolist.XXXXXX")" || return 1
+  always_on_files | grep -v -F -x "$f" > "$tmp" || true
+  if [[ -s "$tmp" ]]; then mv "$tmp" "$ALWAYS_ON_LIST"; else rm -f "$tmp" "$ALWAYS_ON_LIST"; fi
+  return 0
+}
+
 block_bounds() {  # <file>：打印「起 止」行号（新标记优先，其次历史标记）；没有则 return 1
   local file="$1" b e
   for which in new legacy; do
@@ -277,13 +320,18 @@ file_with_block() {  # <file> <blockfile>
   return 0
 }
 
-file_without_block() {  # <file>：stdout = 去掉块（新旧标记都认）后的内容
-  local file="$1" bounds b e
+file_without_block() {  # <file>：stdout = 去掉块（新旧标记都认）+ 其自带分隔空行后的内容
+  local file="$1" bounds b e tmp
   [[ -f "$file" ]] || return 0
   bounds="$(block_bounds "$file")" || true
   if [[ -n "$bounds" ]]; then
     b="${bounds%% *}"; e="${bounds##* }"
-    head -n "$((b - 1))" "$file"
+    # apply_always_on 在非空文件末尾插块前会补一个空行（分隔空行）：这里去掉恰好一个尾部空行，
+    # 让「没有 .bak」的兜底路径也尽量贴近原文件（有 .bak 时走精确还原，不会到这里）。
+    tmp="$(mktemp "${TMPDIR:-/tmp}/ego-decision-layer-out.XXXXXX")" || return 1
+    if [[ "$b" -gt 1 ]]; then head -n "$((b - 1))" "$file" > "$tmp"; else : > "$tmp"; fi   # BSD head 不接受 -n 0
+    if [[ -s "$tmp" && -z "$(tail -n 1 "$tmp")" ]]; then sed '$d' "$tmp"; else cat "$tmp"; fi
+    rm -f "$tmp"
     tail -n "+$((e + 1))" "$file"
   else
     cat "$file"
@@ -306,16 +354,25 @@ apply_always_on() {  # <file>
   always_on_add "$file"
 }
 
-remove_always_on() {  # <file>：有 .bak 就按字节还原，否则只去块
-  local file="$1" tmp
-  if [[ -f "$file.bak" ]]; then
-    cp "$file.bak" "$file" && rm -f "$file.bak"
-    return 0
+remove_always_on() {  # <file>：.bak 与「去掉块后的当前内容」一致才按备份还原；否则只去块（不覆盖非块内容）
+  local file="$1" tmp stripped
+  if [[ -f "$file" && -f "$file.bak" ]]; then
+    stripped="$(mktemp "${TMPDIR:-/tmp}/ego-decision-layer-strip.XXXXXX")" || return 1
+    file_without_block "$file" > "$stripped"
+    if cmp -s "$stripped" "$file.bak"; then
+      # .bak 确实是「插块前的原样」——按备份精确还原
+      rm -f "$stripped"
+      cp "$file.bak" "$file" && rm -f "$file.bak"
+      return 0
+    fi
+    # .bak 是旧的（插块之后文件又被改过，例如命名迁移）：绝不拿它覆盖非块内容，
+    # 改走「只去标记区」路径；.bak 保留不动（不谎称已还原）。
+    rm -f "$stripped"
   fi
   [[ -f "$file" ]] || return 0
   tmp="$(mktemp "${TMPDIR:-/tmp}/ego-decision-layer-out.XXXXXX")" || return 1
   file_without_block "$file" > "$tmp" && mv "$tmp" "$file"
-  [[ -s "$file" ]] || rm -f "$file"   # 只去块后变空、且无 .bak → 这是本脚本建的文件
+  [[ -s "$file" ]] || rm -f "$file"   # 只去块后变空、且无可用备份 → 这是本脚本建的文件
   return 0
 }
 
@@ -481,11 +538,33 @@ if [[ "$MODE" == "always-on" ]]; then
   if apply_always_on "$ALWAYS_ON_FILE"; then
     echo "==> ego-decision-layer always-on"
     info "已写入路由块: ${ALWAYS_ON_FILE}（幂等）"
-    info "移除它（连同路由层）: bash ${WIRE_SCRIPT} --restore"
+    info "只移除这一块: bash ${WIRE_SCRIPT} --always-on --remove ${ALWAYS_ON_FILE}"
+    info "连同路由层一起还原: bash ${WIRE_SCRIPT} --restore"
     exit 0
   fi
   warn "写入失败: ${ALWAYS_ON_FILE}"
   exit 1
+fi
+
+# ── --always-on --remove / --always-on-remove：只移目标文件的块，绝不碰接管层 ──
+if [[ "$MODE" == "always-on-remove" ]]; then
+  echo "==> ego-decision-layer always-on --remove"
+  if [[ ! -e "$ALWAYS_ON_FILE" ]]; then fail "文件不存在: ${ALWAYS_ON_FILE}"; fi
+  if ! file_has_block "$ALWAYS_ON_FILE"; then
+    info "无块可移: ${ALWAYS_ON_FILE}（没有我们的标记块，未改动任何文件）"
+    info "当前 always-on: $(always_on_remaining)"
+    exit 0
+  fi
+  if [[ $DRY_RUN -eq 1 ]]; then
+    info "会从 ${ALWAYS_ON_FILE} 移除路由块（有 .bak 按备份精确还原，否则只删标记区及其分隔空行）"
+    info "接管层不会被动；当前 always-on: $(always_on_remaining)"
+    exit 0
+  fi
+  if ! remove_always_on "$ALWAYS_ON_FILE"; then warn "移除失败: ${ALWAYS_ON_FILE}"; exit 1; fi
+  always_on_remove_file "$ALWAYS_ON_FILE"
+  info "已移除路由块: ${ALWAYS_ON_FILE}（文件其余内容按原样保留；接管层未动）"
+  info "当前 always-on: $(always_on_remaining)"
+  exit 0
 fi
 
 # ── 三个动作 ─────────────────────────────────────────────────────────────────

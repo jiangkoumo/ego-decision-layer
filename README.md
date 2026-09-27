@@ -171,10 +171,15 @@ OK    ~/.claude/skills/ego-browser（路由层，生成物最新）
 ```bash
 bash scripts/wire-agent-skills.sh --always-on AGENTS.md              # 项目级：只覆盖这个仓库，随仓库共享（最安全）
 bash scripts/wire-agent-skills.sh --always-on ~/.claude/CLAUDE.md    # 本机所有 Claude Code 项目
+# 只撤掉某一个文件的那块（不碰接管层）：
+bash scripts/wire-agent-skills.sh --always-on --remove ~/.claude/CLAUDE.md
 ```
 
 块用 `<!-- ego-decision-layer:route begin -->` / `<!-- ego-decision-layer:route end -->` 标记，**幂等**（重复跑只替换自己那一块），
-首次写入前备份到同目录 `.bak`，`--restore` 会把它连同接管层一起精确移除（块外内容一字不动）。
+首次写入前备份到同目录 `.bak`。
+**只移除某一个文件的块**用 `--always-on --remove <file>`（别名 `--always-on-remove <file>`）：有 `.bak` 就按备份
+逐字节还原，没有就只删标记区及其自带分隔空行；同步从记录列表里去掉；**不碰接管层**；幂等（没有块 → exit 0）。
+`--restore` 则是全量：连同接管层一起精确移除（块外内容一字不动）。
 **默认不会写任何用户文件**——只有你显式传 `--always-on <file>` 才写。
 
 三种放法各覆盖谁：
