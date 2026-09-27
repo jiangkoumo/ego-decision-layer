@@ -7,6 +7,76 @@
 每个版本按 **新增 / 修复 / 更正 / 未验证** 分组。「更正」记的是被实测推翻的旧结论，
 不是新功能；「未验证」如实列出还没测过的边界。
 
+## 0.4.3 — 2026-09-26
+
+### 修复
+
+- **0.4.2 的「视口 0×0 就硬失败」在本机正常路径上就是回归 → 改成默认自动撑起**。本机复测确认：
+  `taskSpace` 新建的标签页在未导航 / `domcontentloaded` / `load` 之后 `innerWidth/innerHeight`
+  都是 `0×0`，`page.info()` 也为空——**0×0 是这台机器的常态，不是异常**。0.4.2 之后
+  `examples/bench/run-pair.sh A` 从 `success:true, steps:2` 变成 `viewport_degraded`，CLI 冒烟也 exit 1。
+  现在 `runJevAutonomousLoop` 入口仍只读一次视口（`page.evaluate`，不新增 CDP），任一为 0 时
+  **默认自动** `Emulation.setDeviceMetricsOverride`（`1280x900@1`）并打印一行说明，然后照常跑；
+  视口正常时**零额外 CDP**；只有自动撑起失败（CDP 报错）或显式 strict 时才 `viewport_degraded`
+  （`steps: 0`、不派发、不问模型）。引擎结果新增 `viewportOverride`（本次实际下发的覆盖），
+  CLI 据此决定退出时是否清理。
+
+### 新增
+
+- **`--no-force-viewport`（CLI）/ `options.strictViewport`（库）**：显式要求「视口退化就直接失败」，
+  把 0.4.2 的 fail-fast 保留为**可选**行为。`--force-viewport <宽x高>[@缩放]` 保留，尺寸优先于自动默认值。
+- **`bench/test-viewport-degraded.mjs` 改写为 0.4.3 语义**：0×0 默认自动撑起并继续、strict 失败、
+  CDP 撑不起来失败、正常视口零额外 CDP、显式值优先、确定性、CLI 参数。
+
+### 更正
+
+- **「覆盖跨进程持续」是错的**（0.4.2 写入）。本机复测：覆盖是 **per-space / per-page** 的——
+  给某个 space 设过覆盖后，**紧接着新开的 space 仍是 0×0**；旧 `run-pair A success:true` 是因为
+  当时别处已有覆盖。已从 SKILL / README / CHANGELOG 更正。
+- **「0×0 是异常宿主」的定位也是错的**（0.4.2）：本机新 space 常态就是 0×0。
+- `Emulation.clearDeviceMetricsOverride` 在本机 0.5.1.13 上**确实不回退**（同进程 set→clear 后
+  `innerWidth/innerHeight` 仍是覆盖值）——这一事实保留；但 CLI 不再把它当作“覆盖仍在生效”的依据，
+  而是退出时再读一次视口、如实报告。
+
+### 未验证
+
+- 同 0.4.2：本地模型后端只用 stub 验证，未在真实本地推理服务上端到端跑过；跨域 iframe 不处理；
+  frame 祖先带缩放/旋转直接拒绝；危险词表是启发式；真实验证码 / 登录墙未测。
+- 自动撑起的默认尺寸 `1280x900@1` 是否适合所有任务未做遍历；`clearDeviceMetricsOverride` 在其它
+  ego lite 版本上的行为未测（只在 0.5.1.13 上测过）。
+
+## 0.4.2 — 2026-09-26
+
+### 修复
+
+- **视口退化为 0×0 时不再静默降级成 `no_targets`**。真实来源：另一个 Agent harness
+  （Hermes Agent）在本机跑多步任务时，agent space 的标签页视口是 `0×0`
+  （`window.innerWidth/innerHeight = 0`），元素表按视口可见性构建 → 恒为空。旧行为是每轮
+  `no_targets` + 700ms 等待，**4 步白烧、决策 0ms、一次模型都没问**，用户看不出原因。
+  现在 `runJevAutonomousLoop` 在**循环入口**读一次视口（一次 `page.evaluate`，不新增 CDP 调用），
+  任一为 0 时**立即**返回 `viewport_degraded`（`steps: 0`、不派发任何动作、不问模型），
+  并在返回值 `hint` 与日志里给出可执行提示。`no_targets` 语义不变（元素表为空但视口正常时
+  仍走原逻辑）；检查放在循环入口，`runJevStep` 不变。
+
+### 新增
+
+- **`--force-viewport <宽x高>[@缩放]`（CLI）/ `options.forceViewport`（库）**：给退化宿主的显式
+  逃生通道。循环开始前用 `Emulation.setDeviceMetricsOverride` 撑起视口（默认关闭，不改默认行为）；
+  退出时按需用 `Emulation.clearDeviceMetricsOverride` 清理——**保留了 space / 页面时不清理**
+  （`--keep` / `--keep-space`，或任务失败时 CLI 会自动保留 space），覆盖仍在生效并在输出里说明，
+  方便人工检查。非法输入 → 退出码 2，错误信息说明期望格式。`parseViewportSpec` 导出，
+  接受 `1280x900` / `1280x900@2` / `{ width, height, deviceScaleFactor? }`。
+- **测试 `bench/test-viewport-degraded.mjs`**（纯 node、stub page、stub fetch，无浏览器无凭证）：
+  覆盖 0×0 明确失败（fetch 0、步数 ≤ 1、不派发）、`forceViewport` 后正常推进、正常视口行为不变、
+  提示字样、两次运行逐字节一致、CLI 非法输入 exit 2。
+
+### 未验证
+
+- 同 0.4.1：本地模型后端只用 stub 验证，未在真实本地推理服务上端到端跑过；跨域 iframe 不处理；
+  frame 祖先带缩放/旋转直接拒绝；危险词表是启发式；真实验证码 / 登录墙未测。
+- **视口退化的修复由 stub 覆盖 + 真实 Hermes 运行验证，未在更多宿主上遍历**。该版本把 0×0
+  当异常硬失败——0.4.3 复测证明它在**本机正常路径上就是回归**，视口相关实测结论已在 0.4.3「更正」。
+
 ## 0.4.1 — 2026-09-26
 
 ### 新增

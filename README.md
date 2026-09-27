@@ -434,6 +434,7 @@ ego-decision-layer --decider openai-compatible \
 | `stuck` | 同一动作连续 3 次无变化（含反复滚动；原生下拉重问仍失败也归这里） |
 | `target_missing` | 选了需要目标的动作却没解析出目标（连续 2 次） |
 | `no_targets` | 连续 3 次空快照（页面可能仍在加载） |
+| `viewport_degraded` | 视口退化（0×0）**且**自动撑起失败（CDP 报错），或显式 `--no-force-viewport` / `options.strictViewport`：`steps: 0`、不派发、不问模型。**默认**在 0×0 时会自动 `Emulation.setDeviceMetricsOverride` 撑起 `1280×900@1` 后照常跑（视口正常时零额外 CDP），不报此因；见「已知限制」与 [`SKILL.md`](SKILL.md) 的「边界（实测）」 |
 | `guard_rejected` | 执行前守卫拒绝（陈旧/遮挡/不可用/跨 frame 命中失败，或命中危险动作词表 `dangerous_action`），该步未执行 |
 | `invalid_response` | 决策响应不通过校验（System One：非 argmax / 概率和不一致；本地后端：非 JSON / 缺问题头 / 候选非法），未执行 |
 | `low_confidence` | 有校准置信度的后端上，置信度低于 `minOpConfidence` / `doneThreshold` / `minTargetConfidence` 阈值（阈值默认关；无置信度的本地后端不受影响） |
@@ -461,6 +462,16 @@ ego-decision-layer --decider openai-compatible \
     派给子代理时，**必须在 handoff 里显式写「用 `ego-decision-layer` CLI」**，否则它不会自己选。
   - 注意事项：`n=5/6`、单机单模型、探针只报计划；这不能外推成「真实执行成功率」。
 - **跨域 iframe 不处理**：读不到 `contentDocument`，这类树不在观测范围内。
+- **新建标签页视口 0×0 是本机常态，引擎默认自动撑起**：本机 ego lite 0.5.1.13 上，`taskSpace`
+  新建的标签页在未导航 / `domcontentloaded` / `load` 之后 `innerWidth/innerHeight` 都是 `0×0`，
+  `page.info()` 也为空；覆盖是 per-space/per-page 的，**新开的 space 仍是 0×0**（不跨运行生效）。
+  元素表按视口可见性构建 → 0×0 时恒为空，所以循环入口检测到 0×0 会**自动**
+  `Emulation.setDeviceMetricsOverride` 撑起 `1280×900@1` 后照常跑（视口正常时零额外 CDP）；
+  `--force-viewport <宽x高>[@缩放]` 指定尺寸，`--no-force-viewport`（库 `strictViewport`）才改为
+  直接以 `viewport_degraded` 失败。症状与来源由另一个 Agent harness（Hermes Agent）在本机真实运行中发现，
+  细节见 [`SKILL.md`](SKILL.md) 的「边界（实测）」。
+  `Emulation.clearDeviceMetricsOverride` 在本机 0.5.1.13 上实测不把视口回退（同进程调过之后仍显示覆盖值）；
+  CLI 退出时会再读一次视口并如实报告，不谎报“已清除”。
 - **frame 祖先带缩放/旋转时直接拒绝**：frame 内坐标换算会失真，所以宁可不点。
   frame 元素到文档根的祖先链上有非 identity 的 2D 线性变换（scale/rotate/skew）或 `zoom !== 1`
   时记 `frame_transformed`；纯平移、`translateZ(0)` 这类只影响合成的写法放行。

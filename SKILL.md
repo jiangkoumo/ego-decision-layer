@@ -2,7 +2,7 @@
 name: ego-decision-layer
 description: 多步线性浏览器任务（连续点击、翻页、搜索表单提交、导航跳转）的默认入口：用 `ego-decision-layer` 一条命令让决策层在单个 ego-browser 进程内闭环决策（默认 System One / Jev，可换本地 OpenAI 兼容后端；browser automation / multi-step click chain / form submit / navigation），不再每步退回大模型思考。单步动作、精确 DOM/选择器、批量抓取仍走 ego-browser 原生 API；也可把官方 ego-browser 技能入口接管成路由层。当任务涉及浏览器多步操作、要写 ego-browser nodejs 脚本（await import / fetch / 凭证落盘）时读它。
 metadata:
-  version: "0.4.1"
+  version: "0.4.3"
   date: "2026-09-26"
   requires: ego-browser
 ---
@@ -227,6 +227,23 @@ console.log(result); // { success, reason, steps, history }
 >   真实长列表里 Jev 会自己滚或点相似链接）——但它已不是必需品，滚动本身现在能推进目标。
 > - Jev 若在页面边界反复交替上/下滚，仍可能跑到 `maxSteps`（有界，但不优雅；实测未遇到）。
 
+- **新建标签页视口 0×0 是宿主常态（本机实测，不是异常）**：本机 ego lite 0.5.1.13 上，
+  `taskSpace` 新建的标签页在**未导航 / `goto(domcontentloaded)` 之后 / `load` 之后**读到的
+  `window.innerWidth/innerHeight` **全是 0×0**，`page.info()` 也拿不到尺寸；覆盖是
+  **per-space / per-page** 的，**紧接着新开的 space 仍是 0×0**（不会跨运行生效）。元素表按
+  **视口可见性**构建（既有设计，不是 bug），0×0 时恒为空 → 不处理就是每轮 `no_targets` + 700ms
+  等待，**白烧步数且一次模型都没问**（决策 0ms），用户还看不出原因。所以**默认行为是自动撑起**：
+  循环入口读一次视口（`page.evaluate`，不新增 CDP），任一为 0 时自动
+  `Emulation.setDeviceMetricsOverride { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }`
+  并打印一行说明，然后照常跑；**视口本来正常时不做任何覆盖调用**（零额外 CDP）。
+  `--force-viewport <宽x高>[@缩放]`（库 `options.forceViewport`）指定尺寸（优先于自动值）；
+  `--no-force-viewport`（库 `options.strictViewport: true`）才回到「退化直接失败」；
+  **只有自动撑起也失败**（CDP 报错）或显式 strict 时才以 `viewport_degraded` 失败
+  （`steps: 0`、不派发、不问模型）。退出时按需用 `Emulation.clearDeviceMetricsOverride` 清理
+  （保留了 space / 页面时不清理），**清理结果如实报告（不谎报“已清除”）**：本机 0.5.1.13 实测，
+  同进程调过 `clearDeviceMetricsOverride` 之后 `innerWidth/innerHeight` 仍显示覆盖值。
+  **来源**：0×0 常态与症状由另一个 Agent harness（Hermes Agent）在本机真实运行中发现；
+  0.4.2 曾把它当异常硬失败（在本机正常路径上就是回归），0.4.3 改回默认自动撑起。
 - Jev 只发一次并行判断、**无跨请求记忆**：复合目标（A 然后 B）依赖引擎回填的「已完成步骤」，
   已内置并已验证（两步导航、已填字段改写、下拉改选、勾选均通过）。更长链路未做专项评估。
 - 元素表由**一次 `page.evaluate` 在页面内自建**（默认 `maxTargets` 60 项、可见文本 `maxText` 2500
@@ -263,8 +280,12 @@ console.log(result); // { success, reason, steps, history }
   可用 `textModel: null` 显式禁用，或传自定义 `async (input) => string` 函数接入其他模型。
 - 由模型生成的文本会让落地 URL 不可预测（中文搜索词会被编码），这类任务不要指望 `--until`，
   靠 `jev_done` 或 `check` 判成功。
+- **`viewport_degraded`（宿主视口 0×0）**：视口退化（0×0）**且**自动撑起失败（`Emulation.setDeviceMetricsOverride` 报错），
+  或显式 `--no-force-viewport` / `options.strictViewport` 要求直接失败时返回：`steps: 0`、不派发任何动作、不问模型。
+  **默认**在 0×0 时会自动撑起 1280×900 后照常跑（视口正常时零额外 CDP），不报此因。
 - 退出条件。成功：`check_passed` / `check_passed_after_step`（`check` 通过，推荐）或 `jev_done`
-  （Jev 判定完成）。失败：`no_progress`（连续 5 次变更类动作页面无变化）、`stuck`（同一动作连续
+  （Jev 判定完成）。失败：`viewport_degraded`（视口 0×0 **且**自动撑起失败或显式 strict，**未执行任何动作**；
+  默认会自动撑起 1280×900 后照常跑，不报此因）、`no_progress`（连续 5 次变更类动作页面无变化）、`stuck`（同一动作连续
   3 次无变化，含反复滚动）、`target_missing`（选了需目标的动作却没解析出目标，**且已用完有界滚动
   揭示额度**，连续 2 次）、
   `no_targets`（连续 3 次元素表为空）、`guard_rejected`（执行前守卫拒绝，决策已陈旧或元素不可用，

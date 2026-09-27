@@ -42,6 +42,11 @@ USAGE() {
   --until <substr>   页面 URL 包含该子串时立即判成功（推荐，确定性退出条件）
   --keep <a,b>       完成后保留的页面标签，如 p1,p2（默认全部关闭）
   --keep-space       完成后不关闭 taskSpace，便于人工接手检查
+  --force-viewport <宽x高>[@缩放]
+                     视口退化为 0×0（本机新建标签页是常态）时撑起的尺寸；不传则自动用
+                     1280x900@1。覆盖是 per-space/per-page 的，不跨进程持久
+  --no-force-viewport
+                     视口 0×0 时不自动撑起，直接以 viewport_degraded 失败（库选项 strictViewport: true）
   --api-key <key>    直接传入 Jev API Key
   --decider <kind>   决策后端：systemone（默认）| openai-compatible（本地 /v1/chat/completions）
   --base-url <url>   覆盖后端地址（openai-compatible 传端点根，如 http://127.0.0.1:11434/v1）
@@ -182,7 +187,30 @@ write_route_status() {  # <out-file>
   printf 'null\n' > "$out"
 }
 
-TARGET_URL=""; SPACE_ID=""; MAX_STEPS="10"; UNTIL=""; KEEP=""; KEEP_SPACE="0"; API_KEY_OVERRIDE=""; GOAL=""; TEXTS=(); ROUTE_STATUS=0; HANDOFF=0; HANDOFF_JSON=0
+# 校验 --force-viewport：期望 <宽>x<高>[@缩放]（如 1280x900 或 1280x900@2）；合法返回 0
+validate_force_viewport() {
+  local spec="$1" base scale w h
+  [ -n "$spec" ] || return 1
+  base="$spec"; scale=""
+  case "$spec" in
+    *@*) base="${spec%@*}"; scale="${spec##*@}"; [ -n "$base" ] && [ -n "$scale" ] || return 1 ;;
+  esac
+  w="${base%%x*}"        # 第一个 x 之前
+  h="${base#*x}"         # 第一个 x 之后
+  [ "$w" != "$base" ] || return 1            # 没有 x
+  [ -n "$w" ] && [ -n "$h" ] || return 1
+  case "$w" in *[!0-9]*) return 1 ;; esac
+  case "$h" in *[!0-9]*) return 1 ;; esac
+  [ "$w" -gt 0 ] 2>/dev/null || return 1
+  [ "$h" -gt 0 ] 2>/dev/null || return 1
+  if [ -n "$scale" ]; then
+    case "$scale" in *[!0-9.]*|*.*.*) return 1 ;; esac
+    case "$scale" in [0-9]|[0-9]*[0-9]) ;; *) return 1 ;; esac   # 首尾都得是数字，与引擎解析一致
+  fi
+  return 0
+}
+
+TARGET_URL=""; SPACE_ID=""; MAX_STEPS="10"; UNTIL=""; KEEP=""; KEEP_SPACE="0"; API_KEY_OVERRIDE=""; GOAL=""; TEXTS=(); ROUTE_STATUS=0; HANDOFF=0; HANDOFF_JSON=0; FORCE_VIEWPORT=""; STRICT_VIEWPORT="0"
 DECIDER_KIND=""; DECIDER_BASE_URL=""; DECIDER_MODEL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -192,6 +220,10 @@ while [[ $# -gt 0 ]]; do
     --until) UNTIL="$2"; shift 2 ;;
     --keep) KEEP="$2"; shift 2 ;;
     --keep-space) KEEP_SPACE="1"; shift ;;
+    --force-viewport)
+      [ $# -ge 2 ] || { echo "错误: --force-viewport 需要参数，期望格式 <宽>x<高>[@缩放]，例如 1280x900" >&2; exit 2; }
+      FORCE_VIEWPORT="$2"; shift 2 ;;
+    --no-force-viewport) STRICT_VIEWPORT="1"; shift ;;
     --api-key) API_KEY_OVERRIDE="$2"; shift 2 ;;
     --decider) DECIDER_KIND="$2"; shift 2 ;;
     --base-url) DECIDER_BASE_URL="$2"; shift 2 ;;
@@ -232,6 +264,11 @@ if [[ "$ROUTE_STATUS" == "1" ]]; then
   exec bash "$ROUTE_WIRE" --status-json
 fi
 
+if [[ "$FORCE_VIEWPORT" != "" ]] && ! validate_force_viewport "$FORCE_VIEWPORT"; then
+  echo "错误: --force-viewport 参数非法（得到 \"${FORCE_VIEWPORT}\"）；期望 <宽>x<高>[@缩放]，例如 1280x900 或 1280x900@2" >&2
+  exit 2
+fi
+
 if [[ -z "$GOAL" ]]; then echo "错误: 请提供目标描述" >&2; exit 2; fi
 case "$DECIDER_KIND" in
   ""|systemone|openai-compatible) ;;
@@ -262,6 +299,7 @@ write_route_status "$ROUTE_JSON"
 JEV_GOAL="$GOAL" JEV_URL="$TARGET_URL" JEV_UNTIL="$UNTIL" JEV_KEEP="$KEEP" \
 JEV_STEPS="$MAX_STEPS" JEV_KEY="$API_KEY_OVERRIDE" JEV_SPACE="$SPACE_ID" \
 JEV_KEEP_SPACE="$KEEP_SPACE" JEV_CONFIG_OUT="$TMPD/config.json" \
+JEV_FORCE_VIEWPORT="$FORCE_VIEWPORT" JEV_STRICT_VIEWPORT="$STRICT_VIEWPORT" \
 JEV_BASE_URL="${TYPESAFE_BASE_URL:-}" JEV_FALLBACK_BASE_URL="${TYPESAFE_FALLBACK_BASE_URL:-}" \
 JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" \
 JEV_ROUTE_FILE="$ROUTE_JSON" \
@@ -275,6 +313,8 @@ node -e '
     steps: Number(process.env.JEV_STEPS),
     spaceId: process.env.JEV_SPACE || null,
     keepSpace: process.env.JEV_KEEP_SPACE === "1",
+    forceViewport: process.env.JEV_FORCE_VIEWPORT || null,
+    strictViewport: process.env.JEV_STRICT_VIEWPORT === "1",
     apiKey: process.env.JEV_KEY || null,
     // ego 运行时拿不到父进程环境变量，后端地址必须在父进程读好、写进配置再送进去
     baseUrl: process.env.JEV_BASE_URL || null,
@@ -336,6 +376,8 @@ const result = await runJevAutonomousLoop(page, cfg.goal, {
   baseUrl: cfg.baseUrl || undefined,
   fallbackBaseUrl: cfg.fallbackBaseUrl || undefined,
   deciderConfig: cfg.deciderConfig || undefined,
+  forceViewport: cfg.forceViewport || undefined,
+  strictViewport: cfg.strictViewport || undefined,
   check: cfg.until ? async (p) => (await p.url()).includes(cfg.until) : undefined,
 });
 
@@ -347,8 +389,35 @@ console.log(JSON.stringify({
   spaceId: task.spaceId,
   phases: result.phases, serverModels: result.serverModels, usage: result.usage,
   serverEndpoints: result.serverEndpoints,
+  viewport: result.viewport ?? null, hint: result.hint ?? null,
+  viewportOverride: result.viewportOverride ?? null,
   route,
 }, null, 2));
+
+// 视口覆盖的退出处理：本次真的下发过覆盖（自动或 --force-viewport）才处理；
+// 除非本次把 space / 页面留给人工检查，否则清掉覆盖。
+// “保留”既包括 --keep / --keep-space，也包括失败路径（CLI 失败时会保留 space 供排查）——
+// 那种情况下清掉覆盖会让被检视的 space 退回 0×0，反而没法看。
+const retainedForInspection = !result.success || cfg.keepSpace || Boolean(cfg.keep);
+if (result.viewportOverride) {
+  if (retainedForInspection) {
+    console.log("视口覆盖仍在生效（本次保留了 space / 页面供人工检查）；需要时自行清除：Emulation.clearDeviceMetricsOverride");
+  } else {
+    try {
+      await page.cdp("Emulation.clearDeviceMetricsOverride");
+      // 实测：本机 ego lite 上 clear 未必回退覆盖——再读一次视口，如实报告，不谎报“已清除”。
+      let remaining = null;
+      try { remaining = await page.evaluate(() => ({ width: innerWidth, height: innerHeight })); } catch { /* 读不到就不报告 */ }
+      if (remaining && remaining.width > 0 && remaining.height > 0) {
+        console.log("已调用 Emulation.clearDeviceMetricsOverride，但视口仍为 " + remaining.width + "×" + remaining.height + "（宿主未回退，覆盖可能持续生效）");
+      } else {
+        console.log("已清除视口覆盖（Emulation.clearDeviceMetricsOverride）");
+      }
+    } catch (e) {
+      console.log("清除视口覆盖失败：" + (e && e.message ? e.message : e));
+    }
+  }
+}
 
 if (result.success && !cfg.keepSpace) {
   const keep = cfg.keep ? cfg.keep.split(",").map((s) => s.trim()).filter(Boolean) : [];

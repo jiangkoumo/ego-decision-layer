@@ -934,6 +934,59 @@ function revealScrollInPage(payload) {
 }
 
 /**
+ * 页面内：读一次视口尺寸。
+ * 宿主把 agent space 的标签页裁成 0×0 时（真实踩到过：另一个 Agent harness 的宿主），
+ * 元素表按视口可见性构建 → 恒为空 → 之前会静默降级成 no_targets。这里只做一次廉价读取，
+ * 让循环入口能在跑任何一步之前明确失败。
+ */
+function viewportSizeInPage() {
+  return { width: innerWidth, height: innerHeight };
+}
+
+/**
+ * 读一次视口尺寸（一次 page.evaluate，不用 CDP）。读不到 / 异常返回 null：未知就不误判。
+ */
+async function readViewportSize(page) {
+  try {
+    const v = await page.evaluate(viewportSizeInPage);
+    const width = Number(v?.width);
+    const height = Number(v?.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 解析「强制视口」规格：接受 `"1280x900"` / `"1280x900@2"` 字符串，或 `{ width, height,
+ * deviceScaleFactor?, mobile? }` 对象。非法返回 null（调用方负责报用法错误，CLI 退出码 2）。
+ */
+export function parseViewportSpec(spec) {
+  if (!spec) return null;
+  if (typeof spec === "object") {
+    const width = Number(spec.width);
+    const height = Number(spec.height);
+    const scale = spec.deviceScaleFactor == null ? 1 : Number(spec.deviceScaleFactor);
+    if (!(width > 0) || !(height > 0) || !(scale > 0)) return null;
+    return { width: Math.round(width), height: Math.round(height), deviceScaleFactor: scale, mobile: Boolean(spec.mobile) };
+  }
+  const m = /^([0-9]+)x([0-9]+)(?:@([0-9]+(?:\.[0-9]+)?))?$/.exec(String(spec).trim());
+  if (!m) return null;
+  const width = Number(m[1]);
+  const height = Number(m[2]);
+  const scale = m[3] == null ? 1 : Number(m[3]);
+  if (!(width > 0) || !(height > 0) || !(scale > 0)) return null;
+  return { width, height, deviceScaleFactor: scale, mobile: false };
+}
+
+/**
+ * 视口退化（0×0）且用户没有指定尺寸时，自动撑起的默认尺寸。
+ * 本机 ego lite 0.5.1.13 上「新建 space 视口 = 0×0」是常态，不是异常。
+ */
+export const DEFAULT_VIEWPORT = { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false };
+
+/**
  * 页面内：执行前的最后一刻检查 —— 节点是否还在、是否可用、是否被遮挡，并算出真实点击坐标。
  * 绝不把选择器交给模型：模型只给整数 ref，这里按 DOM 身份取回节点。
  */
@@ -2195,6 +2248,9 @@ export async function runJevStep(page, goal, options = {}) {
  *   textModel      文本生成来源：配置对象（默认读 ~/.config/typesafe/text_model.json）
  *                  或自定义 async (input) => string 函数；两者都缺失时不提供输入操作
  *   check          async (page, step) => boolean，命中即判定成功（推荐用于确定目标）
+ *   forceViewport  视口 0×0 时撑起的尺寸：`"1280x900"` / `"1280x900@2"` 或
+ *                  `{ width, height, deviceScaleFactor? }`；不传则退化时自动用 1280x900@1
+ *   strictViewport  true = 视口退化时**不**自动撑起，直接以 `viewport_degraded` 失败
  *   stepDelay      每步动作后的静默等待（默认 300ms）
  *   navWaitMs      静默后等待新一轮 load 的上限（默认 1200ms），用于捕捉延迟导航
  *   onStep         日志回调，默认 console.log
@@ -2211,12 +2267,14 @@ export async function runJevAutonomousLoop(page, goal, options = {}) {
   const serverModels = new Set();
   const serverEndpoints = new Set();
   const usage = { input_tokens: 0, output_tokens: 0 };
+  let viewportOverride = null; // 本次实际下发过的视口覆盖（自动或 --force-viewport），供调用方决定是否清理
   const done = (result) => ({
     ...result,
     phases: { ...phases },
     serverModels: [...serverModels],
     serverEndpoints: [...serverEndpoints],
     usage: { ...usage },
+    viewportOverride,
   });
   let noTargetStreak = 0;
   let noProgressStreak = 0;
@@ -2231,6 +2289,47 @@ export async function runJevAutonomousLoop(page, goal, options = {}) {
   let lastAction = null;
   let optionRetryStreak = 0; // 「选中项不在当前 options 里」的重问计数（我们自己的）
   const progress = [];
+
+  // ── 循环入口：视口 0×0 是宿主常态（本机实测），默认自动撑起，别失败 ──────────
+  // 本机 ego lite 0.5.1.13 实测：taskSpace 新建的标签页在未导航 / domcontentloaded / load
+  // 之后，innerWidth/innerHeight 都是 0×0，page.info() 也拿不到尺寸。元素表按视口可见性构建
+  // （既有设计），0×0 时恒为空 → 不处理就是每轮 no_targets + 700ms 等待，白烧步数且不问模型。
+  // 这里只做一次廉价读取（page.evaluate，不新增 CDP）；退化时默认自动 setDeviceMetricsOverride。
+  // 只有撑不起来（CDP 报错）或显式 strictViewport 时才以 viewport_degraded 失败。
+  const viewport = await readViewportSize(page);
+  const degraded = Boolean(viewport) && (viewport.width === 0 || viewport.height === 0);
+  const forcedSpec = options.forceViewport ? parseViewportSpec(options.forceViewport) : null;
+  if (options.forceViewport && !forcedSpec) {
+    log("  ! forceViewport 规格无法解析（期望 WxH 或 WxH@scale，例如 1280x900）；退化视口将改用自动 1280×900");
+  }
+  if (degraded) {
+    const baseHint =
+      `视口退化为 ${viewport.width}×${viewport.height}：元素表按视口可见性构建，只会得到空元素表。`;
+    const tailHint =
+      `可用 --force-viewport <宽x高>[@缩放]（库调用传 options.forceViewport）指定尺寸；` +
+      `--no-force-viewport（库 options.strictViewport: true）则显式要求直接失败。`;
+    if (options.strictViewport) {
+      const hint = baseHint + `已按 --no-force-viewport / strictViewport 直接失败（未派发任何动作）。` + tailHint;
+      log(`⛔ [Ego-Jev] ${hint}`);
+      return done({ success: false, steps: 0, reason: "viewport_degraded", viewport, hint, history });
+    }
+    const spec = forcedSpec || DEFAULT_VIEWPORT;
+    try {
+      await page.cdp("Emulation.setDeviceMetricsOverride", spec);
+      viewportOverride = spec;
+      log(
+        `  ⟳ 宿主视口 ${viewport.width}×${viewport.height}，` +
+          (forcedSpec
+            ? `已按 --force-viewport 撑起 ${spec.width}×${spec.height}@${spec.deviceScaleFactor}`
+            : `已自动撑起 ${spec.width}×${spec.height}@${spec.deviceScaleFactor}`) +
+          `（Emulation.setDeviceMetricsOverride）；用 --force-viewport 可指定，--no-force-viewport 可改为直接失败`
+      );
+    } catch (e) {
+      const hint = baseHint + `自动撑起失败（Emulation.setDeviceMetricsOverride 报错：${e?.message || e}），请手动在宿主里撑起视口后重试。` + tailHint;
+      log(`⛔ [Ego-Jev] ${hint}`);
+      return done({ success: false, steps: 0, reason: "viewport_degraded", viewport, hint, history });
+    }
+  }
 
   for (let step = 1; step <= maxSteps; step++) {
     if (options.check) {
