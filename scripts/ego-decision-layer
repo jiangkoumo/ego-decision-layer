@@ -37,6 +37,9 @@ USAGE() {
 选项:
   --url <url>        先导航到的网址
   --space <id>       复用已有 taskSpace（默认新建，不会抢占用户的 space）
+  --extract <instr>  结构化数据抽取指令（在导航后或目标操作完成后执行抽取，输出结构化 JSON）
+  --schema <json|file>
+                     抽取的期望结构（JSON 字符串或 schema 文件路径）
   --text <value>     可填入的候选文本，可重复传入；Jev 只能从中选择，不生成文本
   --steps <number>   最大步数（默认 10）
   --until <substr>   页面 URL 包含该子串时立即判成功（推荐，确定性退出条件）
@@ -48,6 +51,13 @@ USAGE() {
   --no-force-viewport
                      视口 0×0 时不自动撑起，直接以 viewport_degraded 失败（库选项 strictViewport: true）
   --api-key <key>    直接传入 Jev API Key
+  --cache            启用动作指纹缓存与自愈回放（默认开启）
+  --no-cache         禁用动作指纹缓存与回放（每步均问模型）
+  --batch            启用多动作批量打包派发（默认开启）
+  --no-batch         禁用多动作批量打包派发（每步单动作）
+  --visual-fallback  启用无语义界面视觉几何兜底（默认开启）
+  --no-visual-fallback
+                     禁用视觉几何兜底通道（仅依赖 DOM 元素表）
   --decider <kind>   决策后端：systemone（默认）| openai-compatible（本地 /v1/chat/completions）
   --base-url <url>   覆盖后端地址（openai-compatible 传端点根，如 http://127.0.0.1:11434/v1）
   --model <name>     覆盖模型名（默认 jev-latest）
@@ -211,11 +221,23 @@ validate_force_viewport() {
 }
 
 TARGET_URL=""; SPACE_ID=""; MAX_STEPS="10"; UNTIL=""; KEEP=""; KEEP_SPACE="0"; API_KEY_OVERRIDE=""; GOAL=""; TEXTS=(); ROUTE_STATUS=0; HANDOFF=0; HANDOFF_JSON=0; FORCE_VIEWPORT=""; STRICT_VIEWPORT="0"
-DECIDER_KIND=""; DECIDER_BASE_URL=""; DECIDER_MODEL=""
+DECIDER_KIND=""; DECIDER_BASE_URL=""; DECIDER_MODEL=""; EXTRACT_INSTRUCTION=""; EXTRACT_SCHEMA=""; USE_CACHE="1"; USE_BATCH="1"; USE_VISUAL="1"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url) TARGET_URL="$2"; shift 2 ;;
     --space) SPACE_ID="$2"; shift 2 ;;
+    --cache) USE_CACHE="1"; shift ;;
+    --no-cache) USE_CACHE="0"; shift ;;
+    --batch) USE_BATCH="1"; shift ;;
+    --no-batch) USE_BATCH="0"; shift ;;
+    --visual-fallback) USE_VISUAL="1"; shift ;;
+    --no-visual-fallback) USE_VISUAL="0"; shift ;;
+    --extract)
+      [ $# -ge 2 ] || { echo "错误: --extract 需要抽取指令" >&2; exit 2; }
+      EXTRACT_INSTRUCTION="$2"; shift 2 ;;
+    --schema)
+      [ $# -ge 2 ] || { echo "错误: --schema 需要 JSON 字符串或文件路径" >&2; exit 2; }
+      EXTRACT_SCHEMA="$2"; shift 2 ;;
     --steps) MAX_STEPS="$2"; shift 2 ;;
     --until) UNTIL="$2"; shift 2 ;;
     --keep) KEEP="$2"; shift 2 ;;
@@ -269,17 +291,57 @@ if [[ "$FORCE_VIEWPORT" != "" ]] && ! validate_force_viewport "$FORCE_VIEWPORT";
   exit 2
 fi
 
-if [[ -z "$GOAL" ]]; then echo "错误: 请提供目标描述" >&2; exit 2; fi
+EXTRACT_SCHEMA_CONTENT=""
+if [[ -n "$EXTRACT_SCHEMA" && -z "$EXTRACT_INSTRUCTION" ]]; then
+  echo "错误: --schema 需要 --extract" >&2; exit 2
+fi
+if [[ -n "$EXTRACT_SCHEMA" ]]; then
+  if ! EXTRACT_SCHEMA_CONTENT="$(EXTRACT_SCHEMA_RAW="$EXTRACT_SCHEMA" EGO_EXTRACT_LIB="$LIB" node --input-type=module -e '
+    const fs = await import("node:fs");
+    const { normalizeExtractionSchema } = await import(process.env.EGO_EXTRACT_LIB);
+    const raw = process.env.EXTRACT_SCHEMA_RAW;
+    let content = raw;
+    if (fs.existsSync(raw) && fs.statSync(raw).isFile()) {
+      content = fs.readFileSync(raw, "utf8");
+    }
+    try {
+      const schema = JSON.parse(content);
+      normalizeExtractionSchema(schema);
+      process.stdout.write(content);
+    } catch (e) {
+      process.stderr.write(e.message);
+      process.exit(1);
+    }
+  ')"; then
+    echo "错误: --schema 参数非法（期望合法的 JSON 字符串或有效的 JSON 文件路径）" >&2
+    exit 2
+  fi
+fi
+
+if [[ -z "$GOAL" && -z "$EXTRACT_INSTRUCTION" ]]; then
+  echo "错误: 请提供目标描述或 --extract 指令" >&2
+  exit 2
+fi
 case "$DECIDER_KIND" in
   ""|systemone|openai-compatible) ;;
   *) echo "错误: --decider 只支持 systemone / openai-compatible（得到 ${DECIDER_KIND}）" >&2; exit 2 ;;
 esac
 if [[ ! -f "$LIB" ]]; then echo "错误: 找不到引擎 ${LIB}（可用 EGO_JEV_LIB 指定）" >&2; exit 2; fi
-if [[ -z "$API_KEY_OVERRIDE" ]]; then
-  # 本地 OpenAI 兼容后端不需要 TypeSafe 凭证：--decider 显式指定，或 decider.json 已配置
+
+# 凭证检查：
+# 1. 如果有 GOAL 操作目标，需确认 Jev 凭证（或本地 decider）
+if [[ -n "$GOAL" && -z "$API_KEY_OVERRIDE" ]]; then
   if ! EGO_JEV_LIB_CHECK="$LIB" JEV_DECIDER_KIND="$DECIDER_KIND" node --input-type=module -e \
       'const m = await import(process.env.EGO_JEV_LIB_CHECK); const local = process.env.JEV_DECIDER_KIND === "openai-compatible" || m.loadDeciderConfig()?.kind === "openai-compatible"; process.exit(m.loadApiKey() || local ? 0 : 1);' >/dev/null 2>&1; then
     echo "错误: 未找到 Jev 凭证。写入 ${CONFIG_FILE}（一行 API Key），或在 ~/.config/ego-decision-layer/credentials 写 export TYPESAFE_API_KEY=…，或用 --api-key；用本地后端请配 ~/.config/ego-decision-layer/decider.json 或加 --decider openai-compatible。" >&2
+    exit 3
+  fi
+fi
+# 2. 如果包含抽取指令 --extract，需确认文本生成模型配置（text_model.json 或本地 openai-compatible decider）
+if [[ -n "$EXTRACT_INSTRUCTION" ]]; then
+  if ! EGO_JEV_LIB_CHECK="$LIB" JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" node --input-type=module -e \
+      'const m = await import(process.env.EGO_JEV_LIB_CHECK); const overrides = Object.fromEntries([["kind",process.env.JEV_DECIDER_KIND],["baseUrl",process.env.JEV_DECIDER_BASE_URL],["model",process.env.JEV_DECIDER_MODEL]].filter(([,v])=>v)); const cfg = m.resolveExtractionModel({deciderConfig:overrides}); process.exit(cfg?.baseUrl && cfg?.model && (cfg.kind === "openai-compatible" || m.resolveTextApiKey(cfg) || m.resolveDeciderApiKey(cfg)) ? 0 : 1);' >/dev/null 2>&1; then
+    echo "错误: 未找到文本生成模型配置（--extract 需要）。请配置 ~/.config/typesafe/text_model.json，或在 ~/.config/ego-decision-layer/decider.json 配置本地后端。" >&2
     exit 3
   fi
 fi
@@ -302,11 +364,24 @@ JEV_KEEP_SPACE="$KEEP_SPACE" JEV_CONFIG_OUT="$TMPD/config.json" \
 JEV_FORCE_VIEWPORT="$FORCE_VIEWPORT" JEV_STRICT_VIEWPORT="$STRICT_VIEWPORT" \
 JEV_BASE_URL="${TYPESAFE_BASE_URL:-}" JEV_FALLBACK_BASE_URL="${TYPESAFE_FALLBACK_BASE_URL:-}" \
 JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" \
-JEV_ROUTE_FILE="$ROUTE_JSON" \
-node -e '
-  const fs = require("node:fs");
+JEV_EXTRACT_INSTRUCTION="$EXTRACT_INSTRUCTION" JEV_EXTRACT_SCHEMA="$EXTRACT_SCHEMA_CONTENT" \
+JEV_USE_CACHE="$USE_CACHE" JEV_CACHE_FILE="${EGO_JEV_CACHE_FILE:-$HOME/.config/ego-decision-layer/action-cache.json}" \
+JEV_USE_BATCH="$USE_BATCH" JEV_USE_VISUAL="$USE_VISUAL" \
+JEV_ROUTE_FILE="$ROUTE_JSON" JEV_ENGINE_LIB="$LIB" \
+node --input-type=module -e '
+  const fs = await import("node:fs");
+  const engine = await import(process.env.JEV_ENGINE_LIB);
+  const deciderConfig = Object.fromEntries([["kind",process.env.JEV_DECIDER_KIND],["baseUrl",process.env.JEV_DECIDER_BASE_URL],["model",process.env.JEV_DECIDER_MODEL]].filter(([,v])=>v));
   fs.writeFileSync(process.env.JEV_CONFIG_OUT, JSON.stringify({
-    goal: process.env.JEV_GOAL,
+    goal: process.env.JEV_GOAL || null,
+    cache: process.env.JEV_USE_CACHE !== "0",
+    cacheFile: process.env.JEV_USE_CACHE !== "0" ? process.env.JEV_CACHE_FILE : null,
+    batch: process.env.JEV_USE_BATCH !== "0",
+    visualFallback: process.env.JEV_USE_VISUAL !== "0",
+    extractInstruction: process.env.JEV_EXTRACT_INSTRUCTION || null,
+    extractSchema: process.env.JEV_EXTRACT_SCHEMA || null,
+    // Resolve parent environment config paths before ego strips custom variables.
+    extractionModel: process.env.JEV_EXTRACT_INSTRUCTION ? engine.resolveExtractionModel({deciderConfig}) : null,
     url: process.env.JEV_URL || null,
     until: process.env.JEV_UNTIL || null,
     keep: process.env.JEV_KEEP || null,
@@ -330,13 +405,13 @@ node -e '
     routeFile: process.env.JEV_ROUTE_FILE || null,
     texts: process.argv.slice(1),
   }, null, 2));
-' "${TEXTS[@]+"${TEXTS[@]}"}"
+' -- "${TEXTS[@]+"${TEXTS[@]}"}"
 
 CFG="$TMPD/config.json"
 
 "$EGO_BIN" nodejs <<EOF
 const { readFile } = await import("node:fs/promises");
-const { runJevAutonomousLoop, renderJevSummary } = await import("$LIB");
+const { runJevAutonomousLoop, renderJevSummary, extract, renderExtractSummary } = await import("$LIB");
 
 const cfg = JSON.parse(await readFile("$CFG", "utf8"));
 const startedAt = Date.now();
@@ -348,7 +423,7 @@ try { if (cfg.routeFile) route = JSON.parse(await readFile(cfg.routeFile, "utf8"
 let task;
 if (cfg.spaceId) {
   const id = Number(cfg.spaceId);
-  try { task = await takeOverTaskSpace(id); } catch { task = await claimTaskSpace(id); }
+  task = await taskSpace(id);
 } else {
   task = await taskSpace("ego-decision-layer");
 }
@@ -369,45 +444,86 @@ if (cfg.url) {
   await page.waitForTimeout(800);
 }
 
-const result = await runJevAutonomousLoop(page, cfg.goal, {
-  maxSteps: cfg.steps,
-  text: cfg.texts,
-  apiKey: cfg.apiKey || undefined,
-  baseUrl: cfg.baseUrl || undefined,
-  fallbackBaseUrl: cfg.fallbackBaseUrl || undefined,
-  deciderConfig: cfg.deciderConfig || undefined,
-  forceViewport: cfg.forceViewport || undefined,
-  strictViewport: cfg.strictViewport || undefined,
-  check: cfg.until ? async (p) => (await p.url()).includes(cfg.until) : undefined,
-});
+let loopResult = null;
+if (cfg.goal) {
+  loopResult = await runJevAutonomousLoop(page, cfg.goal, {
+    maxSteps: cfg.steps,
+    text: cfg.texts,
+    apiKey: cfg.apiKey || undefined,
+    baseUrl: cfg.baseUrl || undefined,
+    fallbackBaseUrl: cfg.fallbackBaseUrl || undefined,
+    deciderConfig: cfg.deciderConfig || undefined,
+    forceViewport: cfg.forceViewport || undefined,
+    strictViewport: cfg.strictViewport || undefined,
+    cache: cfg.cache !== false,
+    cacheFile: cfg.cacheFile || undefined,
+    cacheContext: { until:cfg.until, decider:cfg.deciderConfig },
+    batch: cfg.batch !== false,
+    visualFallback: cfg.visualFallback !== false,
+    check: cfg.until ? async (p) => (await p.url()).includes(cfg.until) : undefined,
+  });
+  loopResult.route = route;
+  console.log(renderJevSummary(loopResult));
+}
 
-result.route = route;
-console.log(renderJevSummary(result));
+let extractResult = null;
+if (cfg.extractInstruction) {
+  if (loopResult && !loopResult.success) {
+    console.log("目标操作未成功达成，跳过数据抽取。");
+  } else {
+    console.log("执行数据抽取: " + cfg.extractInstruction);
+    extractResult = await extract(page, cfg.extractInstruction, {
+      schema: cfg.extractSchema,
+      textModel: cfg.extractionModel,
+      deciderConfig: cfg.deciderConfig || undefined,
+    });
+    console.log(renderExtractSummary(extractResult));
+  }
+}
+
+const finalSuccess = cfg.extractInstruction
+  ? Boolean(extractResult && extractResult.success && (!loopResult || loopResult.success))
+  : Boolean(loopResult && loopResult.success);
+
+const finalReason = cfg.extractInstruction
+  ? (extractResult ? (extractResult.success ? "extracted" : extractResult.reason || "extract_failed") : "extract_skipped")
+  : (loopResult ? loopResult.reason : "unknown");
+
 console.log(JSON.stringify({
-  success: result.success, reason: result.reason, steps: result.steps,
-  elapsedMs: Date.now() - startedAt, url: await page.url(), title: await page.title(),
+  success: finalSuccess,
+  reason: finalReason,
+  extracted: Boolean(cfg.extractInstruction),
+  data: extractResult?.data ?? null,
+  instruction: cfg.extractInstruction || null,
+  schema: extractResult?.schema ?? null,
+  steps: loopResult?.steps ?? 0,
+  elapsedMs: Date.now() - startedAt,
+  url: await page.url(),
+  title: await page.title(),
   spaceId: task.spaceId,
-  phases: result.phases, serverModels: result.serverModels, usage: result.usage,
-  serverEndpoints: result.serverEndpoints,
-  viewport: result.viewport ?? null, hint: result.hint ?? null,
-  viewportOverride: result.viewportOverride ?? null,
+  phases: extractResult?.phases || loopResult?.phases,
+  cacheHits: loopResult?.cacheHits ?? 0,
+  cacheHeals: loopResult?.cacheHeals ?? 0,
+  serverModels: loopResult?.serverModels,
+  model: extractResult?.model,
+  error: extractResult?.error ?? null,
+  serverEndpoints: loopResult?.serverEndpoints,
+  usage: extractResult?.usage || loopResult?.usage,
+  viewport: loopResult?.viewport ?? null,
+  hint: loopResult?.hint ?? null,
+  viewportOverride: loopResult?.viewportOverride ?? null,
   route,
 }, null, 2));
 
-// 视口覆盖的退出处理：本次真的下发过覆盖（自动或 --force-viewport）才处理；
-// 除非本次把 space / 页面留给人工检查，否则清掉覆盖。
-// “保留”既包括 --keep / --keep-space，也包括失败路径（CLI 失败时会保留 space 供排查）——
-// 那种情况下清掉覆盖会让被检视的 space 退回 0×0，反而没法看。
-const retainedForInspection = !result.success || cfg.keepSpace || Boolean(cfg.keep);
-if (result.viewportOverride) {
+const retainedForInspection = !finalSuccess || cfg.keepSpace || Boolean(cfg.keep);
+if (loopResult && loopResult.viewportOverride) {
   if (retainedForInspection) {
     console.log("视口覆盖仍在生效（本次保留了 space / 页面供人工检查）；需要时自行清除：Emulation.clearDeviceMetricsOverride");
   } else {
     try {
       await page.cdp("Emulation.clearDeviceMetricsOverride");
-      // 实测：本机 ego lite 上 clear 未必回退覆盖——再读一次视口，如实报告，不谎报“已清除”。
       let remaining = null;
-      try { remaining = await page.evaluate(() => ({ width: innerWidth, height: innerHeight })); } catch { /* 读不到就不报告 */ }
+      try { remaining = await page.evaluate(() => ({ width: innerWidth, height: innerHeight })); } catch {}
       if (remaining && remaining.width > 0 && remaining.height > 0) {
         console.log("已调用 Emulation.clearDeviceMetricsOverride，但视口仍为 " + remaining.width + "×" + remaining.height + "（宿主未回退，覆盖可能持续生效）");
       } else {
@@ -419,14 +535,14 @@ if (result.viewportOverride) {
   }
 }
 
-if (result.success && !cfg.keepSpace) {
+if (finalSuccess && !cfg.keepSpace) {
   const keep = cfg.keep ? cfg.keep.split(",").map((s) => s.trim()).filter(Boolean) : [];
   const receipt = await task.finish({ keep });
   console.log("已关闭 TaskSpace，保留页面: " + JSON.stringify(receipt.retained || []));
-} else if (result.success) {
+} else if (finalSuccess) {
   console.log("按要求保留 TaskSpace " + task.spaceId + "，可手工检查。");
 } else {
   console.log("任务未成功，已保留 TaskSpace " + task.spaceId + " 供排查（未调用 finish）。");
 }
-process.exitCode = result.success ? 0 : 1;
+process.exitCode = finalSuccess ? 0 : 1;
 EOF

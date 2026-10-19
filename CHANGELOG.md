@@ -7,6 +7,122 @@
 每个版本按 **新增 / 修复 / 更正 / 未验证** 分组。「更正」记的是被实测推翻的旧结论，
 不是新功能；「未验证」如实列出还没测过的边界。
 
+## 0.9.0 — 2026-10-19
+
+### 新增
+
+- **无语义界面视觉兜底通道（Visual Grounding Fallback，Phase 5，见 `ROADMAP.md`）**：
+  - 核心思想：借鉴 Midscene.js 的视觉驱动定位思想，解决复杂 Web 应用中 Canvas、富 SVG、无无障碍属性自定义图形控件导致 DOM 元素表为空（`no_targets`）的痛点。
+  - 几何扫描器 `scanVisualRegionsInPage()`：页面内扫描 `<canvas>`、`<svg>`、`[role="img"]` 等图形容器，提取视口内几何包围盒、中心锚点 `{ x, y }` 与可读标签。
+  - 坐标执行层严格护栏 (Fail-Closed)：
+    - 导出 `validateCoordinates(x, y, viewport)`：严校验坐标是否在当前视口范围内（`0 <= x <= innerWidth, 0 <= y <= innerHeight`），负数、NaN、超出视口的坐标立即拒绝派发（`guardRejected: "coordinates_out_of_bounds"`），绝不盲目产生越界事件；
+    - 危险视觉标签拦截：对动作 label 严格复用 `assessDanger` 扫描，命中支付/删除等敏感操作立即拦截（`dangerous_action`），0 次 CDP 派发。
+  - 可插拔视觉定位器接入与调度：支持注入 `options.visualGrounder`，当页面无语义 targets 时自适应激活视觉模式（`observeMode = "visual"`），不直接判输。
+  - ActionCache 坐标动作协同：支持 `click_at` 与 `click_visual` 缓存，热启动 0ms 决策耗时直发裸 CDP 坐标点击。
+  - CLI 与摘要增强：支持 `--visual-fallback`（默认启用）与 `--no-visual-fallback`；`renderJevSummary` 摘要中输出视觉定位激活与执行信息。
+- **持久测试套件**：
+  - 新增 `bench/test-visual-fallback.mjs`（45 项断言全过）：覆盖坐标边界校验、ActionCache 坐标存取重载、页面几何扫描器、Canvas 自适应视觉定位派发、视口越界严格拦截、危险动作拦截、ActionCache 冷写热直发、自主循环调度与网络哨兵（0 次外部 fetch）。
+
+### 未验证
+
+- 针对复杂 WebGL / 3D Canvas 内部多层深度交互的坐标映射尚未做多视角量化。
+
+## 0.8.0 — 2026-10-17
+
+### 新增
+
+- **多动作批量打包派发（Multi-Action Batching，Phase 4，见 `ROADMAP.md`）**：
+  - 核心思想：借鉴 Browser-Use 与现代浏览器自动化项目中的 Action Batching 设计，消除多字段表单与连续交互每步都经历“观测 -> 模型决策 -> 派发 -> 页面等待”的昂贵开销。
+  - 导出 `isActionBatch(val)` 与 `normalizeActionBatch(rawBatch, targets, options)`：支持数组与对象两种批次表达形式，严格校验子动作类型（`click`, `type_text`, `type_text_submit`, `select`, `scroll_down`, `scroll_up`, `wait`），绑定目标元素与候选文本。
+  - 执行层原子预检护栏（Atomic Guardrails）：在派发任何动作前执行全量静态合规校验与 `assessDanger` 危险动作扫描。批次中任一子动作命中危险词表则整批拦截，**0 次派发，零部分副作用**。
+  - 单一 settle 页面等待：整批 N 个子动作连续派发，仅在序列末尾统一调用一次 `settle` 稳定等待，避免每个微动作都交数十至数百毫秒的 IPC 与静默窗口耗时。
+  - 执行中断与状态记录：执行序列中若遇到目标遮挡、离屏或陈旧，安全停止后续动作派发，精确记录已生效的 `executedSubActions` 与 `failedSubActionIndex`，绝不盲目重复已有副作用的操作。
+  - 与 ActionCache 复合缓存深度协同：完整成功的批次操作自动缓存，热启动时 0ms 决策耗时直接批处理派发。
+  - CLI 与摘要增强：支持 `--batch`（默认启用）与 `--no-batch`（显式禁用）；`renderJevSummary` 输出批处理批次与子动作统计行。
+- **持久测试套件**：
+  - `bench/test-multi-action-batch.mjs`（53 项断言全过）：覆盖表单多字段单步批量填充+提交、末尾单一 settle 等待、危险动作全量原子拦截（0 派发）、中途目标丢失安全中断与状态记录、ActionCache 冷写热直发协同、循环调度与网络哨兵（0 次外部 fetch）。
+
+### 未验证
+
+- 针对超大表单（>20 个字段）在极低网络带宽下的批量派发表现尚未做大规模压测。
+
+## 0.7.0 — 2026-10-17
+
+### 新增
+
+- **动作指纹缓存与自愈回放（Phase 3，见 `ROADMAP.md`）**：
+  - 核心导出 `computeDomFingerprint(targets, options)`：基于完整页面 URL（含 origin、路径、query、hash）、完整目标 URL、可交互元素拓扑与控件当前值（value/checked/selectedIndex）计算确定性结构指纹。
+  - 上下文绑定缓存键：严格绑定当前候选文本列表、已完成步骤与后端配置；候选文本变动时绝不重放旧文本；模型生成文本不进回放缓存。
+  - 动作特征与严格匹配 `extractTargetSignature(target)` 与 `matchTargetBySignature(targets, signature)`：页面存在重复语义目标或 kind/URL 不兼容时 fail-closed 拒绝回放。
+  - `cache: false` 显式禁用具最高优先级，覆盖传入的 `actionCache`。
+  - 真 LRU 缓存管理器 `ActionCache` 与 `getActionCache(options)`：命中刷新访问顺序，超限淘汰最久未访问项；持久化加载带大小与条目上限，严格校验结构与 TTL。
+  - 恢复机制与副作用防护：派发前目标不可用时重新观测并在当前步内最多回退一次实时决策；已派发动作若无 DOM 进展或派发报错，作废缓存并立即停止循环（`cache_replay_unverified` / `action_outcome_unknown`），避免盲目重试产生重复副作用。
+  - 计时规范：命中缓存跳过模型请求（`decideMs = 0`），观测与派发如实记录。
+  - CLI 支持 `--cache` 与 `--no-cache`：默认开启，结果 JSON 与摘要展示命中统计。
+- **持久测试套件**：
+  - `bench/test-action-cache.mjs`（53 项断言全过），覆盖输入变更、`cache:false` 最高优先级、完整 URL 隔离、重复目标 fail-closed、真 LRU / TTL、派发前回退一次、无进展回放终止、部分派发报错停止不重放。
+  - `bench/test-action-cache-live.mjs`：真实 Wikipedia 冷启动、热启动与更换输入候选端到端验证。
+
+### 未验证
+
+- 针对极端长会话（如单一任务执行超过 50 步的复杂深层链）的指纹缓存命中率与多步骤路径缓存优化尚未做专项长链实测。
+
+## 0.6.0 — 2026-10-16
+
+### 新增
+
+- **结构化数据抽取原语（Phase 2，见 `ROADMAP.md`）**：
+  - 核心导出 `extract(page, instruction, options)`：弥补纯交互操作在数据提取场景的空白，让 Agent 能以一条语句从当前页面（或指定局部区域）抽取类型化 JSON 结构，无需手写 ad-hoc 选择器。
+  - 原生 DOM 语义流提取 `extractSemanticStreamInPage(payload)`：零外部依赖，过滤不可见后代、保留 `display:contents` 内容，表格保留行列结构，带节点上限与深度限制，按 Unicode 码点安全截断。
+  - 严格 Schema 校验器 `validateSchema(data, schema)` 与 `normalizeExtractionSchema(schema)`：纯原生实现，全量检验所有数组项；支持标准子集（`type`、`properties`、`items`、`required`、`enum`、`minItems`、`maxItems`、`additionalProperties` 及单项简写）；不支持特性调用前直接报错（fail-closed）。
+  - 选择器失败关闭：`options.selector` 不存在或语法错误时直接失败返回，不静默回退 `document.body`，且不发起模型请求。
+  - 控制异常即时传播：`settle` 与 `extract` 遇到接管、失控、evaluate 安全超时等异常立即向上传播，绝不当作普通导航吞掉。
+  - 模型响应与本地后端健壮性：支持本地 OpenAI 兼容后端免 Key 及 `apiKeyFile` 解析；检查 `finish_reason`、refusal 与截断，截断响应（`finish_reason="length"`）直接判定失败。
+- **CLI 支持 `--extract` 与 `--schema`**：
+  - 支持参数与文件路径自动解析、合法性校验（非法报 exit 2）。
+  - 任务编排灵活：既可纯导航后直接执行数据抽取，也可与目标操作（Jev 连续点击/搜索/翻页）无缝拼接，在操作成功后自动接力抽取。
+  - 凭证检查分流：纯抽取仅需文本模型配置，不强制要求 Jev Key；操作+抽取需两者齐备。
+- **测试覆盖**：
+  - `bench/test-extract-http.mjs`：纯 Node 离线测试（mock fetch，48 项断言全过），覆盖真实 HTTP 路径、截断响应拦截、条目数约束与控制停止传播。
+  - `bench/test-extract.mjs`：浏览器离线验收（40 项断言全过），覆盖语义流、隐藏过滤、局部选择器失败关闭、全真 DOM 提取、Schema 校验与网络哨兵。
+
+### 未验证
+
+- 针对超大单页应用（如无限滚动 100 屏）的增量分页抽取尚未封装成批量迭代器（留待后续阶段或由调用方循环调用驱动）。
+
+## 0.5.0 — 2026-10-16
+
+### 新增
+
+- **自适应 Mutation 页面稳定等待（Phase 1，见 `ROADMAP.md`）**：`settle` 从「固定 40ms +
+  最多 120ms 轮询 URL/readyState」改为**页内 MutationObserver + 分两段的有界等待**：
+  - 宽限期内零 DOM 变动 → **一次状态查询即返回**（聚焦输入框、开已渲染菜单这类静态交互
+    不再交任何固定开销，IPC 从多轮轮询降到 2~3 次）；
+  - 宽限期内出现新变动 → 等它静止超过 `settleQuietMs`（默认 120ms）再走，
+    把动作触发的异步渲染（下拉选项、懒加载、骨架屏替换）真正等进来；
+  - 持续变动（游戏 tick / 无限滚动）由 `settleMaxMs`（默认 600ms）硬上限兑现，绝不无限等。
+  `settle` 现导出并返回 `{ quiet, navigated, fast }`，便于离线断言走了哪条路径；
+  导航分支（URL 变化 / readyState 非 complete / evaluate 抛错）语义不变。
+  新导出 `installMutationTracker` / `stateInPage`；`options.settleMode="legacy"` 保留旧行为
+  供 A/B 对照。追踪器挂载失败时自动退回旧轮询行为，不影响任务。
+- **`bench/test-settle-mutation.mjs`**：阶段一验收（`ego-browser nodejs`，离线无需凭证），
+  覆盖幂等挂载、静态快速通道、变动计数、异步渲染等待、导航安全、追踪器失败回退、
+  持续变动有界、legacy 对照八个场景，23 项断言全过。
+- **`ROADMAP.md`**：写下后续四个阶段（结构化抽取原语、动作指纹缓存与自愈回放、
+  多动作批量打包、无语义界面视觉兜底）的目标与借鉴来源。
+
+### 修复
+
+- **路由层模板不再引用已删除的 `references/api.md`**：新版 ego lite 把完整使用指南移到
+  `ego-browser skill` 命令输出，旧模板却仍让 Agent 去读包内 `references/api.md`（该文件已不存在）。
+  模板改为「先跑 `ego-browser skill` 取当前版本指南、API 签名用 `help()` 查询」，
+  并写明官方入口在新版只是引导页、不要假定旧版子目录仍在。
+
+### 未验证
+
+- 阶段一只在本机 `ego-browser 0.6.0.12` 的 `about:blank` 合成 DOM 上验证；
+  真实站点（X / DuckDuckGo 设置页）的端到端收益数字尚未单独测量。
+
 ## 0.4.4 — 2026-09-26
 
 ### 新增

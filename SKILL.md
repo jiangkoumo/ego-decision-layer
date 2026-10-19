@@ -2,8 +2,8 @@
 name: ego-decision-layer
 description: 多步线性浏览器任务（连续点击、翻页、搜索表单提交、导航跳转）的默认入口：用 `ego-decision-layer` 一条命令让决策层在单个 ego-browser 进程内闭环决策（默认 System One / Jev，可换本地 OpenAI 兼容后端；browser automation / multi-step click chain / form submit / navigation），不再每步退回大模型思考。单步动作、精确 DOM/选择器、批量抓取仍走 ego-browser 原生 API；也可把官方 ego-browser 技能入口接管成路由层。当任务涉及浏览器多步操作、要写 ego-browser nodejs 脚本（await import / fetch / 凭证落盘）时读它。
 metadata:
-  version: "0.4.4"
-  date: "2026-09-26"
+  version: "0.9.0"
+  date: "2026-10-19"
   requires: ego-browser
 ---
 # ego-decision-layer — 给 ego-browser 装一个可插拔的决策层
@@ -35,7 +35,8 @@ ego-decision-layer --url "…" "目标"                        # 已链接进 PA
 | 任务形状 | 走哪条路 |
 | --- | --- |
 | **多步线性**：连续点击、翻页/下一页、搜索框输入并提交、多字段表单、导航到目标页 | **本技能**（`ego-decision-layer` CLI 或 `runJevAutonomousLoop`） |
-| 单个动作；需要精确选择器/DOM、批量抽取、截图、文件、网络请求、CDP | `ego-browser` 原生 API（读官方技能） |
+| **结构化数据抽取**：抽取表格/列表/文章标题/链接/价格，无需写 ad-hoc 选择器 | **本技能**（`--extract <instruction>` 或 `extract(page, instruction, options)`，0.6.0 起） |
+| 单个动作；需要精确选择器/DOM、批量原生抓取、截图、文件、网络请求、CDP | `ego-browser` 原生 API（读官方技能） |
 | 内容生成、业务判断（回什么话、选哪个商品、写哪段文案） | 大模型决定，把决定喂给上面两条 |
 
 **但「默认用哪个」不能只靠这段表格**：ego lite 会把官方 `ego-browser` 技能写进每个 Agent 的技能目录
@@ -151,6 +152,26 @@ select_target     ← 原生下拉，候选写成 元素#选项序号（如 ref=
 # 简单目标
 ego-decision-layer --url "https://example.com" "点击登录按钮并聚焦输入框"
 
+# 动作指纹缓存与自愈回放（0.7.0 起）：默认自动开启缓存加速，相同结构热启动 0ms 直发；
+# --no-cache 显式禁用缓存（每步均问模型）
+ego-decision-layer --url "https://en.wikipedia.org/wiki/Main_Page" \
+  --until "/wiki/Jev" --text "Jev" "在搜索框输入 Jev 并提交"
+
+# 多动作批量打包派发（0.8.0 起）：连续填充多字段并提交在单步内完成；
+# --no-batch 显式禁用批处理（每步单动作）
+ego-decision-layer --url "https://example.com/login" \
+  --text "alice" --text "secret123" "填写用户名与密码并点击登录"
+
+# 结构化数据抽取（0.6.0 起）：打开页面并直接按自然语言指令与 Schema 抽取 JSON
+ego-decision-layer --url "https://news.ycombinator.com" \
+  --extract "提取前5条新闻的标题、链接与得分" \
+  --schema '[{"title":"string","url":"string","score":"string"}]'
+
+# 复合任务：先执行 Jev 操作循环，达成后再在该页面执行结构化抽取
+ego-decision-layer --url "https://en.wikipedia.org/wiki/Main_Page" \
+  --until "/wiki/Jev" --text "Jev" --steps 3 "在搜索框输入 Jev 并提交" \
+  --extract "提取词条第一句定义" --schema '{"definition":"string"}'
+
 # 需要输入文本：候选由调用方给，Jev 只负责选字段和选哪段文本
 ego-decision-layer --url "https://en.wikipedia.org/wiki/Main_Page" --text "Jev" \
   --until "/wiki/Jev" "在页面顶部的搜索框中输入并提交搜索"
@@ -188,7 +209,7 @@ ego-decision-layer --space 3 --keep-space --steps 15 "点击未发送帖子并�
 2. **在任何 `ego-browser nodejs` 脚本中导入复用**：
 
 ```js
-import { runJevAutonomousLoop } from "<本技能目录>/scripts/decider-loop.mjs";
+import { runJevAutonomousLoop, extract } from "<本技能目录>/scripts/decider-loop.mjs";
 
 // Jev 在当前页面自主连续操作，直到 check 通过或 Jev 判定 done
 const result = await runJevAutonomousLoop(page, "依次打开 new 页面，再打开 comments 页面", {
@@ -197,14 +218,71 @@ const result = await runJevAutonomousLoop(page, "依次打开 new 页面，再�
   check: async (p) => (await p.url()).includes("/newcomments"), // 确定性成功条件（推荐）
 });
 console.log(result); // { success, reason, steps, history }
+
+// 结构化数据抽取原语（0.6.0 起）：极速 DOM 语义流 + 确定性 Schema 校验
+const dataResult = await extract(page, "提取榜单中的新闻标题与链接", {
+  schema: [{ title: "string", url: "string" }], // 支持标准 JSON Schema 或简写 Schema
+  selector: "#stories",                         // 可选：局部区域选择器
+});
+console.log(dataResult.data);                   // 类型化结构化数据
 ```
+
+抽取响应可以直接返回目标 JSON，也可以用单个 `data` 字段包装。有显式 `schema` 时，
+优先保留符合 schema 的直接结果（包括业务字段本来就叫 `data` 的对象）；仅当直接结果
+不符合、且唯一 `data` 属性内的候选符合 schema 时，解包一层。两者都不符合则失败，
+不会递归解包。未提供 schema 时，沿用唯一 `data` 属性解包一层的约定；需要保留业务
+`data` 字段时请提供明确 schema。Schema 校验通过只证明声明的约束满足，业务完整性仍需核验。
 
 配套导出：`askJev(state, questions, options)` 做单次判断、`parseActionTargets(snapshot)`
 把快照解析成元素表（含 kind/当前值）、`enrichTargets(page, targets)` 一次批量调用补齐下拉选项与
 勾选态、`buildQuestions(targets, { texts, hasTextSource })` 组装操作/目标问题、
 `buildActionMenu()` / `extractCandidateRefs()` 构建动作菜单与提取候选目标、
 `validateChoice(response, questions)` 响应校验（拒收非 argmax 或概率和不一致的响应）、
-`generateText(input, options)` / `loadTextModelConfig()` 文本生成、`runJevStep(page, goal, options)` 走一步。
+`generateText(input, options)` / `loadTextModelConfig()` 文本生成、`runJevStep(page, goal, options)` 走一步、
+`computeDomFingerprint(targets, options)` 计算 DOM 结构指纹、`ActionCache` / `getActionCache(options)`
+动作缓存与自愈管理（0.7.0 起）、`extract(page, instruction, options)` 结构化数据抽取（0.6.0 起）、
+`isActionBatch(val)` / `normalizeActionBatch(rawBatch, targets, options)` 多动作批量打包派发（0.8.0 起）、
+`scanVisualRegionsInPage(payload)` / `validateCoordinates(x, y, viewport)` 视觉几何扫描与坐标护栏（0.9.0 起）。
+
+**无语义界面视觉兜底通道（Visual Grounding Fallback，0.9.0 起）**：借鉴 Midscene.js 思想，针对
+复杂 Web 应用中 `<canvas>`、富 SVG、无无障碍属性自定义图形控件导致 DOM 元素表为空（`no_targets`）
+的痛点，提供页面内几何扫描与自适应坐标兜底原语。
+- **页面内几何扫描**：`scanVisualRegionsInPage()` 提取图形区域在当前视口的几何包围盒、中心锚点 `{ x, y }` 与可读标签；
+- **坐标级执行层严护栏 (Fail-Closed)**：派发前严校验 `0 <= x <= innerWidth, 0 <= y <= innerHeight`，越界坐标（`guardRejected: "coordinates_out_of_bounds"`）立即拒绝；视觉标签复用 `assessDanger` 扫描，危险操作全量拦截；
+- **可插拔视觉定位器接入**：支持注入 `options.visualGrounder` 或通过图形区域构筑选择题调度模型；
+- **ActionCache 坐标协同**：验证成功的坐标动作直接缓存，热启动 0ms 决策直发裸 CDP 派发。
+CLI 默认开启视觉兜底，`--no-visual-fallback`（库 `options.visualFallback: false`）可显式禁用。
+
+**多动作批量打包派发（Multi-Action Batching，0.8.0 起）**：借鉴 Browser-Use 思想，消除多字段表单与连续
+操作每步都必须经历“观测 -> 模型往返 -> 派发 -> 稳定等待”的延迟与 IPC 开销。
+- **单步复合动作执行**：支持将连续多个表单项填充、下拉改选或点击提交打包在单步内派发；
+- **原子预检护栏**：派发前对整批子动作执行合规校验与 `assessDanger` 危险扫描，任一动作命中危险词表整批拦截（0 次派发，零部分副作用）；
+- **单一 settle 等待**：整批动作仅在末尾统一调用一次 settle 页面稳定等待，大幅节省 IPC 与静默窗口耗时；
+- **执行安全中断与精确状态记录**：中途遇目标失效/遮挡安全停止，精确记录 `executedSubActions` 与 `failedSubActionIndex`，绝不盲目重复已有副作用的操作；
+- **复合缓存直发**：成功批次纳入 ActionCache，相同意图热启动 0ms 决策耗时直接批处理派发。
+CLI 默认开启批处理，`--no-batch`（库 `options.batch: false`）可显式禁用。
+
+**动作缓存与自愈回放（Action Cache，0.7.0 起）**：借鉴 Stagehand v4 理念，引擎通过完整页面 URL、
+可交互元素结构拓扑与当前控件值计算确定性指纹，缓存键严格绑定当前候选文本列表、任务进度与后端配置。
+命中缓存时**跳过服务端模型网络请求（决策阶段 `decideMs = 0`）**，观测、定位与派发耗时如实记录。
+安全与恢复边界：
+- 候选文本变动时绝不重放旧文本；模型自动生成的文本不进回放缓存；
+- `cache: false` 显式禁用具最高优先级；
+- 目标存在重复语义、kind 或 URL 不兼容时拒绝回放；
+- 派发前目标不可用时重新观测并最多回退一次实时决策；
+- 动作已派发但无 DOM 进展或派发报错时作废缓存并立即停止循环（`cache_replay_unverified` / `action_outcome_unknown`），避免盲目重试产生重复副作用。
+CLI 默认开启缓存，`--no-cache`（库 `options.cache: false`）可显式禁用。
+
+**动作后等待（自适应，0.5.0 起）**：每个动作后的稳定等待由 `settle(page, options)` 负责，
+页内挂 `MutationObserver` 判断「动作后是否真的安静了」，而不是固定延时：
+
+- 宽限期内零 DOM 变动 → 一次状态查询即返回（静态交互不交任何固定开销）；
+- 宽限期内出现变动 → 等它静止超过 `settleQuietMs`（默认 120ms）再走；
+- 持续变动（游戏 tick / 无限滚动）→ `settleMaxMs`（默认 600ms）硬上限兑现；
+- URL 变化 / `readyState` 非 complete / evaluate 抛错 → 仍按导航分支等 `domcontentloaded`。
+
+可调项：`settleQuietMs`、`settleGraceMs`（默认 = quietMs）、`settleMaxMs`、`settleMinMs`；
+`settleMode: "legacy"` 回旧行为（仅作 A/B 对照）。追踪器挂载失败时自动退回旧轮询行为。
 
 ### 边界（实测）
 

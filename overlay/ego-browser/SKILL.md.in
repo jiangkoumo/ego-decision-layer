@@ -11,13 +11,20 @@ metadata:
 
 本入口由**本地接管层**生成（非厂商文件）：停止被路由 `bash {{WIRE_SCRIPT}} --restore`；查看当前状态 `{{EGO_JEV_CLI}} --route-status`。
 
-**本文件只是路由层。完整技能正文在本机 ego lite 的当前版本里，永远是最新的：**
+**本文件只是路由层。动手前先获取与已安装 ego lite 版本匹配的完整使用指南：**
 
-- 技能正文：`{{EGO_SKILLS_DIR}}/SKILL.md` ← **动手前先读它**（Space/会话纪律、观测与选择器、动作、收尾与清理规则都在那儿）
-- API 签名：`{{EGO_SKILLS_DIR}}/references/api.md`
+```bash
+ego-browser skill
+```
 
-本目录下的 `references/`、`scripts/`、`learnings/` 都是指向上述目录的软链，相对路径照常可用。
-`ego lite` 升级后本层会自动跟随（软链），只有极少数情况需要重跑 `{{WIRE_SCRIPT}}`。
+遵循命令输出的 Space/会话纪律、观测与选择器、动作和收尾规则。输出必须包含以
+`[ego-browser:skill] end of guide` 开头的结束行；缺失表示截断，需要完整读取后再操作。
+升级后重新运行。API 签名用 `help()` / `help("page.click")` 查询。
+
+官方入口：`{{EGO_SKILLS_DIR}}/SKILL.md`；旧版 CLI 不支持 `skill` 命令时按该入口指引处理。
+官方入口在新版中只是引导页，不能代替 `ego-browser skill` 输出的完整指南。
+本目录里的官方子目录通过软链跟随当前安装；不假定 `references/api.md` 等旧版文件仍然存在。
+`ego lite` 升级可能重建 Agent 技能入口，导致本路由层失效；此时重跑 `{{WIRE_SCRIPT}}`。
 
 ## 第一步：先路由，再决定写不写脚本
 
