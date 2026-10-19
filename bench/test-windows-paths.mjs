@@ -66,6 +66,16 @@ if (fnMatch) {
   check("/c/... → file:///C:/...",
     win1 === "file:///C:/Users/someuser/x/decider-loop.mjs", win1);
 
+  // 原生 MSYS 报 MSYS_NT-*；早先误写成 MSBUILD* 会让整条 Windows 分支失效
+  const msys = run("/c/Users/someuser/x/decider-loop.mjs", "MSYS_NT-10.0-19045");
+  check("MSYS_NT 前缀被识别",
+    msys === "file:///C:/Users/someuser/x/decider-loop.mjs", msys);
+
+  // 默认 Cygwin 用 /cygdrive/c/...，不是 /c/...
+  const cyg = run("/cygdrive/c/Users/someuser/x/decider-loop.mjs", "CYGWIN_NT-10.0");
+  check("/cygdrive/c/... → file:///C:/...",
+    cyg === "file:///C:/Users/someuser/x/decider-loop.mjs", cyg);
+
   const win2 = run("D:/repo/scripts/decider-loop.mjs", "MINGW64_NT-10.0");
   check("D:/... → file:///D:/...",
     win2 === "file:///D:/repo/scripts/decider-loop.mjs", win2);
@@ -79,6 +89,20 @@ if (fnMatch) {
   const back = run(backslashPath, "MINGW64_NT-10.0");
   check("反斜杠归一化为正斜杠",
     back === "file:///C:/repo/scripts/decider-loop.mjs", back);
+
+  // URL 保留字符：拼字符串会把 # 之后当成 fragment，路径整段丢失
+  const hashPath = run("/c/work#1/lib/decider-loop.mjs", "MINGW64_NT-10.0");
+  check("# 被百分号编码而非当成 fragment",
+    hashPath === "file:///C:/work%231/lib/decider-loop.mjs", hashPath);
+  check("# 不在 URL 里残留裸 #", !/[^%]#/.test(hashPath.replace("file:///", "")), hashPath);
+
+  const spacePath = run("/c/my repo/lib/decider-loop.mjs", "MINGW64_NT-10.0");
+  check("空格被编码", spacePath === "file:///C:/my%20repo/lib/decider-loop.mjs", spacePath);
+
+  // 中文用户名在 Windows 上很常见，必须按 UTF-8 百分号编码
+  const cjkPath = run("/c/Users/张三/x/decider-loop.mjs", "MINGW64_NT-10.0");
+  check("中文路径被正确编码",
+    cjkPath === "file:///C:/Users/%E5%BC%A0%E4%B8%89/x/decider-loop.mjs", cjkPath);
 
   rmSync(dir, { recursive: true, force: true });
 }

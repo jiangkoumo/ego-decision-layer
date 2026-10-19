@@ -23,21 +23,49 @@ else
 fi
 
 # Node 的 ESM 加载器只接受 file:// / data: / node: URL。Windows（Git Bash / MSYS / Cygwin）下
-# $LIB 是 `/c/...` 或 `C:/...` 形式，直接 await import("/c/...") 会抛
+# $LIB 是 `/c/...`、`/cygdrive/c/...` 或 `C:/...` 形式，直接 await import("/c/...") 会抛
 # ERR_UNSUPPORTED_ESM_URL_SCHEME（'c:' 被当成协议名）。所以这里派生一个只给 import() 用的
-# URL 变量：POSIX 下与 $LIB 相同；Windows 下统一成 file:///C:/...。文件存在性检查仍用 $LIB。
+# URL 变量：POSIX 下与 $LIB 相同；Windows 下统一成合法的 file:// URL。
+# 文件存在性检查仍用 $LIB（原始路径），不受影响。
+#
+# 注意：不能把路径当字符串拼成 file:// URL —— `#` 会被当成 fragment、`%` 会被当成转义、
+# 非 ASCII（中文用户名很常见）也需要百分号编码。所以优先交给 node 的 pathToFileURL，
+# 它按规范做完整编码；只有在 node 不可用时才退回手工转换。
 _lib_to_url() {
   local p="$1"
   case "$p" in
     file://*) printf '%s' "$p"; return 0 ;;   # 调用方已给 URL，原样用
   esac
   case "$(uname -s 2>/dev/null)" in
-    MINGW*|MSBUILD*|CYGWIN*)
-      # /c/x → C:/x（盘符大写）；已有盘符的不动
+    MINGW*|MSYS*|CYGWIN*)
+      # 先显式归一化 cygdrive 前缀：Cygwin 默认是 /cygdrive/c/...，而这台机器可能根本没有
+      # /cygdrive 挂载（Git Bash 一般映射成 /c/）。此时 cygpath 会把 /cygdrive/c/... 当相对
+      # 路径叠加 cwd，反而造出错误结果，所以不能只依赖 cygpath 的结果。
+      case "$p" in
+        /cygdrive/[A-Za-z]/*)
+          # "/cygdrive/" 占 10 个字符，索引 10 是盘符，索引 11 起是余下路径
+          p="$(printf '%s' "${p:10:1}" | tr '[:lower:]' '[:upper:]'):${p:11}"
+          ;;
+      esac
+      # cygpath -m 认得 /c/...，能给出权威的混合路径
+      if command -v cygpath >/dev/null 2>&1; then
+        p="$(cygpath -m "$p" 2>/dev/null || printf '%s' "$p")"
+      fi
       case "$p" in
         /[A-Za-z]/*) p="$(printf '%s' "${p:1:1}" | tr '[:lower:]' '[:upper:]'):${p:2}" ;;
       esac
       p="${p//\\//}"
+      # 首选：node 按 URL 规范编码（处理 # ? % 空格 与 UTF-8 中文路径）
+      if command -v node >/dev/null 2>&1; then
+        local href
+        href="$(node -e 'process.stdout.write(require("node:url").pathToFileURL(process.argv[1]).href)' "$p" 2>/dev/null)"
+        if [ -n "$href" ]; then printf '%s' "$href"; return 0; fi
+      fi
+      # 兜底：node 不可用时手工转义几个会让 URL 解析跑偏的字符
+      p="${p//\%/%25}"
+      p="${p//\#/%23}"
+      p="${p//\?/%3F}"
+      p="${p// /%20}"
       printf 'file:///%s' "$p"
       ;;
     *) printf '%s' "$p" ;;
@@ -377,7 +405,7 @@ TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ego-decision-layer.XXXXXX")"
 # Windows（Git Bash / MSYS）下 mktemp 给的是 /c/tmp/...，而 ego 的内嵌 node 会把同一串解析成
 # C:\tmp\...，父进程写好的 config.json 在子进程里就找不到了。转成混合路径（C:/tmp/...）两边都认。
 case "$(uname -s 2>/dev/null)" in
-  MINGW*|MSBUILD*|CYGWIN*) TMPD="$(cygpath -m "$TMPD")" ;;
+  MINGW*|MSYS*|CYGWIN*) TMPD="$(cygpath -m "$TMPD" 2>/dev/null || printf '%s' "$TMPD")" ;;
 esac
 trap 'rm -rf "$TMPD"' EXIT
 
