@@ -21,6 +21,83 @@ else
   done
   LIB="${LIB:-$SCRIPT_DIR/decider-loop.mjs}"
 fi
+
+# Node 的 ESM 加载器只接受 file:// / data: / node: URL。Windows（Git Bash / MSYS / Cygwin）下
+# $LIB 是 `/c/...`、`/cygdrive/c/...` 或 `C:/...` 形式，直接 await import("/c/...") 会抛
+# ERR_UNSUPPORTED_ESM_URL_SCHEME（'c:' 被当成协议名）。所以这里派生一个只给 import() 用的
+# URL 变量：POSIX 下与 $LIB 相同；Windows 下统一成合法的 file:// URL。
+# 文件存在性检查仍用 ${LIB}（原始路径），不受影响。
+#
+# 注意：不能把路径当字符串直接拼成 file:// URL —— `#` 会被当成 fragment、`%` 会被当成转义、
+# 非 ASCII（中文用户名很常见）也需要百分号编码。所以用 node 做 UTF-8 百分号编码，
+# 但只用它做**纯字符串**编码，不用 pathToFileURL（那是宿主平台相关的 API）。
+# node 不可用时退回手工转义 `% # ? 空格`（不覆盖非 ASCII）。
+# 所有传给原生 Node / ego 子进程的文件路径统一使用同一转换。
+# 先处理盘符别名，避免宿主没有 /cygdrive 挂载时 cygpath 错误叠加 cwd。
+_runtime_path() {
+  local p="$1"
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      p="${p//\\//}"
+      case "$p" in
+        /cygdrive/[A-Za-z]/*)
+          p="$(printf '%s' "${p:10:1}" | tr '[:lower:]' '[:upper:]'):${p:11}" ;;
+        /[A-Za-z]/*)
+          p="$(printf '%s' "${p:1:1}" | tr '[:lower:]' '[:upper:]'):${p:2}" ;;
+      esac
+      if command -v cygpath >/dev/null 2>&1; then
+        p="$(cygpath -m "$p" 2>/dev/null || printf '%s' "$p")"
+      fi
+      p="${p//\\//}"
+      ;;
+  esac
+  printf '%s' "$p"
+}
+
+_lib_to_url() {
+  local p="$1"
+  case "$p" in
+    file://*) printf '%s' "$p"; return 0 ;;   # 调用方已给 URL，原样用
+  esac
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      p="$(_runtime_path "$p")"
+      # 用 node 做百分号编码。刻意**不用** pathToFileURL：那是按宿主平台语义解析路径的 API，
+      # 在 Linux/macOS 上会把 `C:/x` 当成相对路径，产出 `file:///workspace/C:/x`
+      # （这正是跨平台测试在 ubuntu runner 上失败的原因）。这里只做纯字符串编码，
+      # 输入已经是 `C:/...`，所以结果与宿主平台无关。
+      if command -v node >/dev/null 2>&1; then
+        local href
+        href="$(EGO_FILE_URL_PATH="$p" node -e '
+          // 环境变量避免 MSYS 自动改写 node 的路径参数。
+          const p = process.env.EGO_FILE_URL_PATH;
+          const encode = value => value.replace(/[^A-Za-z0-9\/._~:@!$&()*+,;=-]/gu, c => encodeURIComponent(c));
+          if (p.startsWith("//")) {
+            const slash = p.indexOf("/", 2);
+            const host = p.slice(2, slash);
+            if (slash < 3 || !/^[A-Za-z0-9._-]+$/.test(host)) process.exit(1);
+            process.stdout.write("file://" + host + encode(p.slice(slash)));
+          } else {
+            process.stdout.write("file:///" + encode(p));
+          }
+        ' 2>/dev/null)"
+        if [ -n "$href" ]; then printf '%s' "$href"; return 0; fi
+      fi
+      # 兜底：node 不可用时手工转义几个会让 URL 解析跑偏的字符
+      # （注意：这个分支不处理非 ASCII，正确编码中文路径需要 node）
+      p="${p//\%/%25}"
+      p="${p//\#/%23}"
+      p="${p//\?/%3F}"
+      p="${p// /%20}"
+      case "$p" in
+        //*) printf 'file:%s' "$p" ;;  # 保留 UNC 的 authority（服务器名）
+        *) printf 'file:///%s' "$p" ;;
+      esac
+      ;;
+    *) printf '%s' "$p" ;;
+  esac
+}
+LIB_URL="$(_lib_to_url "$LIB")"
 CONFIG_FILE="${TYPESAFE_API_KEY_FILE:-$HOME/.config/typesafe/api_key}"
 EGO_BIN="${EGO_BROWSER_BIN:-ego-browser}"
 
@@ -296,7 +373,7 @@ if [[ -n "$EXTRACT_SCHEMA" && -z "$EXTRACT_INSTRUCTION" ]]; then
   echo "错误: --schema 需要 --extract" >&2; exit 2
 fi
 if [[ -n "$EXTRACT_SCHEMA" ]]; then
-  if ! EXTRACT_SCHEMA_CONTENT="$(EXTRACT_SCHEMA_RAW="$EXTRACT_SCHEMA" EGO_EXTRACT_LIB="$LIB" node --input-type=module -e '
+  if ! EXTRACT_SCHEMA_CONTENT="$(EXTRACT_SCHEMA_RAW="$EXTRACT_SCHEMA" EGO_EXTRACT_LIB="$LIB_URL" node --input-type=module -e '
     const fs = await import("node:fs");
     const { normalizeExtractionSchema } = await import(process.env.EGO_EXTRACT_LIB);
     const raw = process.env.EXTRACT_SCHEMA_RAW;
@@ -331,7 +408,7 @@ if [[ ! -f "$LIB" ]]; then echo "错误: 找不到引擎 ${LIB}（可用 EGO_JEV
 # 凭证检查：
 # 1. 如果有 GOAL 操作目标，需确认 Jev 凭证（或本地 decider）
 if [[ -n "$GOAL" && -z "$API_KEY_OVERRIDE" ]]; then
-  if ! EGO_JEV_LIB_CHECK="$LIB" JEV_DECIDER_KIND="$DECIDER_KIND" node --input-type=module -e \
+  if ! EGO_JEV_LIB_CHECK="$LIB_URL" JEV_DECIDER_KIND="$DECIDER_KIND" node --input-type=module -e \
       'const m = await import(process.env.EGO_JEV_LIB_CHECK); const local = process.env.JEV_DECIDER_KIND === "openai-compatible" || m.loadDeciderConfig()?.kind === "openai-compatible"; process.exit(m.loadApiKey() || local ? 0 : 1);' >/dev/null 2>&1; then
     echo "错误: 未找到 Jev 凭证。写入 ${CONFIG_FILE}（一行 API Key），或在 ~/.config/ego-decision-layer/credentials 写 export TYPESAFE_API_KEY=…，或用 --api-key；用本地后端请配 ~/.config/ego-decision-layer/decider.json 或加 --decider openai-compatible。" >&2
     exit 3
@@ -339,7 +416,7 @@ if [[ -n "$GOAL" && -z "$API_KEY_OVERRIDE" ]]; then
 fi
 # 2. 如果包含抽取指令 --extract，需确认文本生成模型配置（text_model.json 或本地 openai-compatible decider）
 if [[ -n "$EXTRACT_INSTRUCTION" ]]; then
-  if ! EGO_JEV_LIB_CHECK="$LIB" JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" node --input-type=module -e \
+  if ! EGO_JEV_LIB_CHECK="$LIB_URL" JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" node --input-type=module -e \
       'const m = await import(process.env.EGO_JEV_LIB_CHECK); const overrides = Object.fromEntries([["kind",process.env.JEV_DECIDER_KIND],["baseUrl",process.env.JEV_DECIDER_BASE_URL],["model",process.env.JEV_DECIDER_MODEL]].filter(([,v])=>v)); const cfg = m.resolveExtractionModel({deciderConfig:overrides}); process.exit(cfg?.baseUrl && cfg?.model && (cfg.kind === "openai-compatible" || m.resolveTextApiKey(cfg) || m.resolveDeciderApiKey(cfg)) ? 0 : 1);' >/dev/null 2>&1; then
     echo "错误: 未找到文本生成模型配置（--extract 需要）。请配置 ~/.config/typesafe/text_model.json，或在 ~/.config/ego-decision-layer/decider.json 配置本地后端。" >&2
     exit 3
@@ -351,6 +428,9 @@ command -v "$EGO_BIN" >/dev/null 2>&1 || { echo "错误: 找不到 ${EGO_BIN}（
 heal_skill_entry
 
 TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ego-decision-layer.XXXXXX")"
+# 临时文件与缓存都必须按父/子进程一致的文件路径解释。
+TMPD="$(_runtime_path "$TMPD")"
+CACHE_FILE="$(_runtime_path "${EGO_JEV_CACHE_FILE:-$HOME/.config/ego-decision-layer/action-cache.json}")"
 trap 'rm -rf "$TMPD"' EXIT
 
 # 路由状态（只读，不起浏览器）：作为 route 段写进结果 JSON，也进 renderJevSummary
@@ -365,9 +445,9 @@ JEV_FORCE_VIEWPORT="$FORCE_VIEWPORT" JEV_STRICT_VIEWPORT="$STRICT_VIEWPORT" \
 JEV_BASE_URL="${TYPESAFE_BASE_URL:-}" JEV_FALLBACK_BASE_URL="${TYPESAFE_FALLBACK_BASE_URL:-}" \
 JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" \
 JEV_EXTRACT_INSTRUCTION="$EXTRACT_INSTRUCTION" JEV_EXTRACT_SCHEMA="$EXTRACT_SCHEMA_CONTENT" \
-JEV_USE_CACHE="$USE_CACHE" JEV_CACHE_FILE="${EGO_JEV_CACHE_FILE:-$HOME/.config/ego-decision-layer/action-cache.json}" \
+JEV_USE_CACHE="$USE_CACHE" JEV_CACHE_FILE="$CACHE_FILE" \
 JEV_USE_BATCH="$USE_BATCH" JEV_USE_VISUAL="$USE_VISUAL" \
-JEV_ROUTE_FILE="$ROUTE_JSON" JEV_ENGINE_LIB="$LIB" \
+JEV_ROUTE_FILE="$ROUTE_JSON" JEV_ENGINE_LIB="$LIB_URL" \
 node --input-type=module -e '
   const fs = await import("node:fs");
   const engine = await import(process.env.JEV_ENGINE_LIB);
@@ -411,7 +491,7 @@ CFG="$TMPD/config.json"
 
 "$EGO_BIN" nodejs <<EOF
 const { readFile } = await import("node:fs/promises");
-const { runJevAutonomousLoop, renderJevSummary, extract, renderExtractSummary } = await import("$LIB");
+const { runJevAutonomousLoop, renderJevSummary, extract, renderExtractSummary } = await import("$LIB_URL");
 
 const cfg = JSON.parse(await readFile("$CFG", "utf8"));
 const startedAt = Date.now();

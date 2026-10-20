@@ -51,3 +51,4 @@ jobs:
           node bench/test-guardrails.mjs
           node bench/test-wire-skill.mjs
           node bench/test-no-bh-dependency.mjs
+          node bench/test-windows-paths.mjs
