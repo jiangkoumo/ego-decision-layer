@@ -111,6 +111,16 @@ cd ego-decision-layer
 ./install.sh --test     # 顺带跑一次端到端冒烟测试
 ```
 
+### 方式 4：把这段 prompt 丢给你的 Agent
+
+> 帮我安装 https://github.com/jiangkoumo/ego-decision-layer ：
+> 1. 执行 `npx skills add jiangkoumo/ego-decision-layer`（skills CLI 不可用就改成克隆仓库跑 `./install.sh`）；
+> 2. 确认 `ego-browser --version` 正常，没有 ego lite 就先让我装；
+> 3. 确认 `~/.config/typesafe/api_key` 存在且权限 600，缺了就问我要 Key——**不要自己编，也不要回显它**；
+> 4. 跑下面「验证安装」里的命令，把真实输出和退出码报给我；
+> 5. 接管官方 ego-browser 入口（让多步任务默认走 ego-decision-layer）：`bash scripts/wire-agent-skills.sh`，
+>    再用 `--check` 确认 exit 0。**只写 Agent 技能目录，不要改 `/Applications/ego lite.app` 里的任何文件。**
+
 ### 下载与更新渠道
 
 `metadata.version` 当前为 `0.9.1`。Windows 路径修复来自 PR #2（合并提交 `76ee335`），已包含在 `v0.9.1`。
@@ -269,16 +279,6 @@ ego-decision-layer --handoff-prompt --json       # 机器可读：{prompt, skill
   所以插件渠道天然不会覆盖内置技能。
 - hooks（`SessionStart` / `UserPromptSubmit` 注入 `additionalContext`）是唯一「必须发生」的强制层，
   **本轮没做**——它要写用户的 Agent settings。
-
-### 方式 4：把这段 prompt 丢给你的 Agent
-
-> 帮我安装 https://github.com/jiangkoumo/ego-decision-layer ：
-> 1. 执行 `npx skills add jiangkoumo/ego-decision-layer`（skills CLI 不可用就改成克隆仓库跑 `./install.sh`）；
-> 2. 确认 `ego-browser --version` 正常，没有 ego lite 就先让我装；
-> 3. 确认 `~/.config/typesafe/api_key` 存在且权限 600，缺了就问我要 Key——**不要自己编，也不要回显它**；
-> 4. 跑下面「验证安装」里的命令，把真实输出和退出码报给我；
-> 5. 接管官方 ego-browser 入口（让多步任务默认走 ego-decision-layer）：`bash scripts/wire-agent-skills.sh`，
->    再用 `--check` 确认 exit 0。**只写 Agent 技能目录，不要改 `/Applications/ego lite.app` 里的任何文件。**
 
 ### 更新
 
