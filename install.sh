@@ -104,6 +104,8 @@ fi
 
 echo
 echo "完成。常用命令："
+echo "  ego-decision-layer update          # 更新当前安装"
+echo "  ego-decision-layer --version       # 查看版本与提交"
 echo "  ego-decision-layer --url \"https://…\" --until \"/expected/path\" \"目标描述\""
 echo "  引擎也可在 ego-browser nodejs 脚本里 import: $REPO_DIR/scripts/decider-loop.mjs"
 

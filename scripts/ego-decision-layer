@@ -11,6 +11,31 @@ while [ -L "$SOURCE" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
+# Maintenance commands run before engine imports, credentials, routing or browser startup.
+case "${1:-}" in
+  update|--update)
+    shift
+    [ -f "$SCRIPT_DIR/update.sh" ] || { printf '错误: 缺少 scripts/update.sh，请通过原安装渠道更新一次。\n' >&2; exit 2; }
+    exec bash "$SCRIPT_DIR/update.sh" "$@" ;;
+  --version|-v)
+    node - "$SCRIPT_DIR/../SKILL.md" <<'VERSION'
+const fs = require("node:fs");
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
+const file = process.argv[2];
+const version = fs.readFileSync(file, "utf8").match(/^  version:\s*"?([\d.]+)"?\s*$/m)?.[1];
+if (!version) { console.error("无法读取安装版本"); process.exit(2); }
+let commit = "";
+try {
+  const root = fs.realpathSync(path.dirname(file));
+  const gitRoot = fs.realpathSync(execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], {encoding:"utf8",stdio:["ignore","pipe","ignore"]}).trim());
+  if (root === gitRoot) commit = " (" + execFileSync("git", ["-C", root, "rev-parse", "--short", "HEAD"], {encoding:"utf8"}).trim() + ")";
+} catch {}
+console.log("ego-decision-layer " + version + commit);
+VERSION
+    exit $? ;;
+esac
+
 # 引擎查找顺序：显式指定 → 同目录（本仓库布局）→ 仓库根 → 用户级 lib
 if [ -n "${EGO_JEV_LIB:-}" ]; then
   LIB="$EGO_JEV_LIB"
@@ -104,6 +129,8 @@ EGO_BIN="${EGO_BROWSER_BIN:-ego-browser}"
 USAGE() {
   cat <<'TXT'
 用法: ego-decision-layer [选项] <目标描述>
+      ego-decision-layer update [--test]
+      ego-decision-layer --version
 
 示例:
   ego-decision-layer --url "https://example.com" "点击登录按钮并聚焦输入框"

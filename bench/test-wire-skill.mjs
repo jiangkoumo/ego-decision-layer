@@ -323,7 +323,7 @@ makeFakeEgoBrowser();
   fs.mkdirSync(join(mini, "scripts"), { recursive: true });
   fs.mkdirSync(join(mini, "overlay", "ego-browser"), { recursive: true });
   for (const f of ["SKILL.md", "install.sh", "update.sh"]) fs.copyFileSync(join(REPO, f), join(mini, f));
-  for (const f of ["ego-decision-layer", "decider-loop.mjs", "wire-agent-skills.sh"]) fs.copyFileSync(join(REPO, "scripts", f), join(mini, "scripts", f));
+  for (const f of ["ego-decision-layer", "decider-loop.mjs", "wire-agent-skills.sh", "update.sh"]) fs.copyFileSync(join(REPO, "scripts", f), join(mini, "scripts", f));
   fs.copyFileSync(join(REPO, "overlay", "ego-browser", "SKILL.md.in"), join(mini, "overlay", "ego-browser", "SKILL.md.in"));
   fs.writeFileSync(join(CFG, "wire-enabled.json"), `{\n  "enabled": true,\n  "dirs": ["${join(root, "missing-skills")}"]\n}\n`);
   const r = spawnSync("bash", [join(mini, "update.sh")], {

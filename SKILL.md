@@ -28,6 +28,11 @@ ego-decision-layer --url "…" "目标"                        # 已链接进 PA
 "<本技能目录>/scripts/ego-decision-layer" --url "…" "目标"  # 直接用技能内的入口
 ```
 
+更新当前安装：`ego-decision-layer update`；更新后运行冒烟：`ego-decision-layer update --test`；
+查看版本与 Git 提交：`ego-decision-layer --version`。Git 克隆按当前分支上游 fast-forward，
+skills 拷贝按安装记录定向更新本技能并保留原作用域。已跟踪文件未提交改动或更新失败会非零退出，
+ZIP / 插件安装无匹配记录时需走原渠道。旧版本先按原渠道更新一次才能获得新子命令。
+
 基础用法、Space/Page/选择器/收尾纪律仍以 `ego-browser` 技能为准；本技能只负责「让 Jev 加速」这件事。
 
 ## 路由：什么时候用我

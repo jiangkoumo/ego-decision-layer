@@ -29,6 +29,7 @@ jobs:
           bash -n scripts/wire-agent-skills.sh
           bash -n install.sh
           bash -n update.sh
+          bash -n scripts/update.sh
           for f in bench/*.mjs bench/*.js bench/ego-switch/*.mjs examples/bench/*.js; do node --check "$f"; done
           for f in bench/*.sh examples/bench/*.sh; do bash -n "$f"; done
 
@@ -52,3 +53,4 @@ jobs:
           node bench/test-wire-skill.mjs
           node bench/test-no-bh-dependency.mjs
           node bench/test-windows-paths.mjs
+          node bench/test-update.mjs

@@ -129,7 +129,7 @@ cd ego-decision-layer
 | 获取方式 | 是否包含 PR #2 的 Windows 修复 |
 | --- | --- |
 | 新 `git clone`，默认分支 `main` | 是 |
-| 跟踪 `main` 的克隆执行 `git pull --ff-only` / `./update.sh` | 更新成功后包含；工作区有改动时更新脚本会跳过 pull |
+| 跟踪 `main` 的克隆执行 `git pull --ff-only` / `ego-decision-layer update` | 更新成功后包含；工作区有改动时更新会停止并非零退出 |
 | GitHub 下载 `main` 的 ZIP | 是，内容以下载时的 `main` 为准 |
 | 下载 `v0.9.1` 发布页或标签的 ZIP/tar.gz | 是 |
 | 下载 `v0.9.0` 标签的 ZIP/tar.gz，或固定该标签/更早提交 | 否，需要更新到 `v0.9.1` 或含修复的提交 |
@@ -283,14 +283,24 @@ ego-decision-layer --handoff-prompt --json       # 机器可读：{prompt, skill
 ### 更新
 
 ```bash
-cd ego-decision-layer && ./update.sh          # 克隆安装：拉取 + 刷新软链 + 打印版本（幂等，可反复跑）
-./update.sh --test                 # 顺带跑一次端到端冒烟
-npx skills add jiangkoumo/ego-decision-layer  # skills CLI 安装的：重跑一次即覆盖更新
+ego-decision-layer update          # 在任意目录更新当前安装，刷新命令入口与已启用的路由
+ego-decision-layer update --test   # 更新后再跑浏览器冒烟（需要浏览器、网络与凭证）
+ego-decision-layer --version       # 查看版本号；Git 克隆还显示实际提交
 ```
 
-`update.sh` 会自动判断你属于哪种安装方式：git 克隆就 `git pull --ff-only`（软链自动跟随，无需重装）；
-skills CLI 装的是拷贝、会提示你重跑那条 `npx skills add`。**工作区有未提交改动时会跳过 pull**，
-不会覆盖你的改动。
+克隆安装按当前分支的上游执行 `git pull --ff-only`，也支持 Git worktree。
+skills 管理的拷贝会根据安装记录执行 `npx --yes skills update ego-decision-layer --global/--project --yes`，
+只更新本技能并保留全局或项目作用域，不顺带更新其他技能。更新后刷新 PATH 入口及已经启用的路由，
+新开的 Agent 会话会读取新的技能说明。
+
+已跟踪文件有未提交改动、固定在标签/提交、没有上游、网络失败或缺少安装记录时，命令会非零退出并说明原因；
+不会重置本地 Git 改动，也不会把失败报告成“已是最新”。普通未跟踪文件会保留；若与上游新文件冲突，Git 会拒绝覆盖。
+自定义命令目录可用 `BINDIR=/your/bin ego-decision-layer update`；目录不在 PATH 时会提示。
+ZIP 或插件安装请继续通过原渠道更新。新更新器已在 macOS 与隔离 Git/skills 环境验证，Windows 真机更新尚待验证。
+
+**旧版本首次升级**：没有 `update` 子命令时，克隆用户先运行一次 `cd ego-decision-layer && ./update.sh`；
+skills 用户运行 `npx skills update ego-decision-layer`（按原安装作用域选择）。之后即可使用上面的统一命令。
+根目录 `./update.sh` 仍保留为兼容入口。
 
 ## 验证安装（别只看代码，跑起来）
 
@@ -709,7 +719,8 @@ SKILL.md                 技能本体（刻意放在根目录——`npx skills a
 CHANGELOG.md             版本历史（顶部条目必须与 SKILL.md 的 metadata.version 一致）
 AGENTS.md                给其他 Agent 的安装/验证指令（可直接粘贴的 prompt 在里面）
 scripts/decider-loop.mjs  引擎
-scripts/ego-decision-layer CLI（操作、抽取、缓存、批处理、图形兜底；含 Windows 路径转换）
+scripts/ego-decision-layer CLI（任务操作、抽取；update 更新当前安装，--version 查看版本）
+scripts/update.sh        更新器（Git fast-forward / skills 定向更新，带退出码与本地修改保护）
 ROADMAP.md               演进规划、阶段实现与验证边界
 scripts/wire-agent-skills.sh   接管/刷新官方 ego-browser 入口；--check / --restore / --ensure / --status-json / --always-on
 overlay/ego-browser/     路由层的模板（接管时渲染到 Agent 技能目录）
@@ -720,7 +731,7 @@ examples/bench/          A/B 对照基准脚本（CLI 闭环 vs 每步大模型�
 bench/verify.sh          A 臂验证编排（--check-env 预检；结果落 bench/raw/ 或 BENCH_OUT_DIR）
 bench/test-*.mjs         离线/在线测试（含 test-release-consistency.mjs、test-no-bh-dependency.mjs）
 install.sh               手工安装（接 CLI 进 PATH、准备凭证；**默认接管入口**，--no-wire 跳过）
-update.sh                一键更新（幂等；自动识别克隆/拷贝两种安装方式，并重接管入口）
+update.sh                兼容更新入口（转发到 scripts/update.sh）
 ```
 
 ## 致谢
