@@ -34,23 +34,36 @@ check("EGO_EXTRACT_LIB 用 LIB_URL", /EGO_EXTRACT_LIB="\$LIB_URL"/.test(src));
 check("JEV_ENGINE_LIB 用 LIB_URL", /JEV_ENGINE_LIB="\$LIB_URL"/.test(src));
 check("heredoc 里 import 用 LIB_URL", /await import\("\$LIB_URL"\)/.test(src));
 check("没有 import(\"\$LIB\") 残留", !/await import\("\$LIB"\)/.test(src));
-check("TMPD 在 Windows 上转成混合路径", /cygpath -m "\$TMPD"/.test(src));
+check("TMPD 使用子进程路径转换", /TMPD="\$\(_runtime_path "\$TMPD"\)"/.test(src));
+check("缓存默认路径与覆盖路径都先转换", /CACHE_FILE="\$\(_runtime_path "\$\{EGO_JEV_CACHE_FILE:-\$HOME\//.test(src));
+check("配置序列化使用转换后的缓存路径", /JEV_CACHE_FILE="\$CACHE_FILE"/.test(src));
 
 // ── 行为检查：真跑 _lib_to_url ─────────────────────────────────────────
 const fnMatch = src.match(/_lib_to_url\(\)\s*\{[\s\S]*?\n\}/);
-check("找到 _lib_to_url 函数", Boolean(fnMatch));
+const runtimeMatch = src.match(/_runtime_path\(\)\s*\{[\s\S]*?\n\}/);
+check("找到路径转换函数", Boolean(fnMatch && runtimeMatch));
 
-if (fnMatch) {
+if (fnMatch && runtimeMatch) {
   const dir = mkdtempSync(join(tmpdir(), "ego-decision-layer-winpath-"));
-  // 把 uname 换成可控桩：用 $FAKE_OS 固定分支，真实调用链不变
-  const stubbed = fnMatch[0].replace(/\$\(uname -s 2>\/dev\/null\)/g, '"${FAKE_OS:-$(uname -s 2>/dev/null)}"');
   const scriptPath = join(dir, "probe.sh");
-  // 写文件而不是 bash -c 传参：避免二次转义把反斜杠/斜杠吃掉。
-  // 入参走环境变量，不用位置参数（避免 $0/$1 错位）。
-  writeFileSync(scriptPath, `${stubbed}\n_lib_to_url "$PROBE_PATH"\n`);
+  // 固定 OS 与挂载映射，避免 macOS/Linux 本机是否装 cygpath 影响覆盖率。
+  const stubs = `
+set -e
+uname() { printf '%s' "$FAKE_OS"; }
+cygpath() {
+  if [ "$2" = "/home/tester/cache.json" ]; then
+    printf '%s' 'C:/cygwin64/home/tester/cache.json'
+  elif [ "$2" = "/home/tester/.config/ego-decision-layer/action-cache.json" ]; then
+    printf '%s' 'C:/cygwin64/home/tester/.config/ego-decision-layer/action-cache.json'
+  else
+    printf '%s' "$2"
+  fi
+}
+`;
+  writeFileSync(scriptPath, `${stubs}\n${runtimeMatch[0]}\n${fnMatch[0]}\nif [ "$PROBE_KIND" = runtime ]; then _runtime_path "$PROBE_PATH"; else _lib_to_url "$PROBE_PATH"; fi\n`);
 
-  const run = (input, fakeOs) => {
-    const env = { ...process.env, PROBE_PATH: input };
+  const run = (input, fakeOs, kind = "url") => {
+    const env = { ...process.env, PROBE_PATH: input, PROBE_KIND: kind };
     if (fakeOs) env.FAKE_OS = fakeOs;
     try {
       return execFileSync("bash", [scriptPath], { encoding: "utf8", env }).trim();
@@ -103,6 +116,29 @@ if (fnMatch) {
   const cjkPath = run("/c/Users/张三/x/decider-loop.mjs", "MINGW64_NT-10.0");
   check("中文路径被正确编码",
     cjkPath === "file:///C:/Users/%E5%BC%A0%E4%B8%89/x/decider-loop.mjs", cjkPath);
+
+  for (const os of ["MINGW64_NT-10.0", "MSYS_NT-10.0", "CYGWIN_NT-10.0"]) {
+    const unc = run("//server/share/my repo#1/张三/lib.mjs", os);
+    check(`${os}: UNC authority 与路径编码`,
+      unc === "file://server/share/my%20repo%231/%E5%BC%A0%E4%B8%89/lib.mjs", unc);
+    check(`${os}: UNC URL 可解析且服务器名保留`, new URL(unc).hostname === "server");
+  }
+  const uncBack = run(String.raw`\\server\share\lib.mjs`, "MINGW64_NT-10.0");
+  check("反斜杠 UNC 路径保留 authority", uncBack === "file://server/share/lib.mjs", uncBack);
+  const percent = run("/c/a%20b/q?.mjs", "MSYS_NT-10.0");
+  check("百分号与问号不会被解释为 URL 转义或查询", percent === "file:///C:/a%2520b/q%3F.mjs", percent);
+  for (const [input, expected] of [
+    ["/c/Users/tester/.config/ego-decision-layer/action-cache.json", "C:/Users/tester/.config/ego-decision-layer/action-cache.json"],
+    ["/cygdrive/d/cache/action-cache.json", "D:/cache/action-cache.json"],
+    ["/home/tester/.config/ego-decision-layer/action-cache.json", "C:/cygwin64/home/tester/.config/ego-decision-layer/action-cache.json"],
+    ["/home/tester/cache.json", "C:/cygwin64/home/tester/cache.json"],
+    ["//server/share/cache.json", "//server/share/cache.json"],
+    [String.raw`C:\cache\action-cache.json`, "C:/cache/action-cache.json"],
+  ]) {
+    const actual = run(input, "CYGWIN_NT-10.0", "runtime");
+    check(`子进程缓存路径: ${input}`, actual === expected, actual);
+  }
+  check("POSIX 子进程路径保持原样", run("/home/tester/cache.json", "Linux", "runtime") === "/home/tester/cache.json");
 
   rmSync(dir, { recursive: true, force: true });
 }

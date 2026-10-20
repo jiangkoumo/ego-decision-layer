@@ -26,12 +26,34 @@ fi
 # $LIB 是 `/c/...`、`/cygdrive/c/...` 或 `C:/...` 形式，直接 await import("/c/...") 会抛
 # ERR_UNSUPPORTED_ESM_URL_SCHEME（'c:' 被当成协议名）。所以这里派生一个只给 import() 用的
 # URL 变量：POSIX 下与 $LIB 相同；Windows 下统一成合法的 file:// URL。
-# 文件存在性检查仍用 $LIB（原始路径），不受影响。
+# 文件存在性检查仍用 ${LIB}（原始路径），不受影响。
 #
 # 注意：不能把路径当字符串直接拼成 file:// URL —— `#` 会被当成 fragment、`%` 会被当成转义、
 # 非 ASCII（中文用户名很常见）也需要百分号编码。所以用 node 做 UTF-8 百分号编码，
 # 但只用它做**纯字符串**编码，不用 pathToFileURL（那是宿主平台相关的 API）。
 # node 不可用时退回手工转义 `% # ? 空格`（不覆盖非 ASCII）。
+# 所有传给原生 Node / ego 子进程的文件路径统一使用同一转换。
+# 先处理盘符别名，避免宿主没有 /cygdrive 挂载时 cygpath 错误叠加 cwd。
+_runtime_path() {
+  local p="$1"
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      p="${p//\\//}"
+      case "$p" in
+        /cygdrive/[A-Za-z]/*)
+          p="$(printf '%s' "${p:10:1}" | tr '[:lower:]' '[:upper:]'):${p:11}" ;;
+        /[A-Za-z]/*)
+          p="$(printf '%s' "${p:1:1}" | tr '[:lower:]' '[:upper:]'):${p:2}" ;;
+      esac
+      if command -v cygpath >/dev/null 2>&1; then
+        p="$(cygpath -m "$p" 2>/dev/null || printf '%s' "$p")"
+      fi
+      p="${p//\\//}"
+      ;;
+  esac
+  printf '%s' "$p"
+}
+
 _lib_to_url() {
   local p="$1"
   case "$p" in
@@ -39,34 +61,26 @@ _lib_to_url() {
   esac
   case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*)
-      # 先显式归一化 cygdrive 前缀：Cygwin 默认是 /cygdrive/c/...，而这台机器可能根本没有
-      # /cygdrive 挂载（Git Bash 一般映射成 /c/）。此时 cygpath 会把 /cygdrive/c/... 当相对
-      # 路径叠加 cwd，反而造出错误结果，所以不能只依赖 cygpath 的结果。
-      case "$p" in
-        /cygdrive/[A-Za-z]/*)
-          # "/cygdrive/" 占 10 个字符，索引 10 是盘符，索引 11 起是余下路径
-          p="$(printf '%s' "${p:10:1}" | tr '[:lower:]' '[:upper:]'):${p:11}"
-          ;;
-      esac
-      # cygpath -m 认得 /c/...，能给出权威的混合路径
-      if command -v cygpath >/dev/null 2>&1; then
-        p="$(cygpath -m "$p" 2>/dev/null || printf '%s' "$p")"
-      fi
-      case "$p" in
-        /[A-Za-z]/*) p="$(printf '%s' "${p:1:1}" | tr '[:lower:]' '[:upper:]'):${p:2}" ;;
-      esac
-      p="${p//\\//}"
+      p="$(_runtime_path "$p")"
       # 用 node 做百分号编码。刻意**不用** pathToFileURL：那是按宿主平台语义解析路径的 API，
       # 在 Linux/macOS 上会把 `C:/x` 当成相对路径，产出 `file:///workspace/C:/x`
       # （这正是跨平台测试在 ubuntu runner 上失败的原因）。这里只做纯字符串编码，
       # 输入已经是 `C:/...`，所以结果与宿主平台无关。
       if command -v node >/dev/null 2>&1; then
         local href
-        href="$(node -e '
-          const p = process.argv[1];
-          // 保留 URL 路径中合法的字符（含盘符冒号与分隔斜杠），其余按 UTF-8 百分号编码
-          process.stdout.write("file:///" + p.replace(/[^A-Za-z0-9\/._~:@!$&()*+,;=-]/gu, (c) => encodeURIComponent(c)));
-        ' "$p" 2>/dev/null)"
+        href="$(EGO_FILE_URL_PATH="$p" node -e '
+          // 环境变量避免 MSYS 自动改写 node 的路径参数。
+          const p = process.env.EGO_FILE_URL_PATH;
+          const encode = value => value.replace(/[^A-Za-z0-9\/._~:@!$&()*+,;=-]/gu, c => encodeURIComponent(c));
+          if (p.startsWith("//")) {
+            const slash = p.indexOf("/", 2);
+            const host = p.slice(2, slash);
+            if (slash < 3 || !/^[A-Za-z0-9._-]+$/.test(host)) process.exit(1);
+            process.stdout.write("file://" + host + encode(p.slice(slash)));
+          } else {
+            process.stdout.write("file:///" + encode(p));
+          }
+        ' 2>/dev/null)"
         if [ -n "$href" ]; then printf '%s' "$href"; return 0; fi
       fi
       # 兜底：node 不可用时手工转义几个会让 URL 解析跑偏的字符
@@ -75,7 +89,10 @@ _lib_to_url() {
       p="${p//\#/%23}"
       p="${p//\?/%3F}"
       p="${p// /%20}"
-      printf 'file:///%s' "$p"
+      case "$p" in
+        //*) printf 'file:%s' "$p" ;;  # 保留 UNC 的 authority（服务器名）
+        *) printf 'file:///%s' "$p" ;;
+      esac
       ;;
     *) printf '%s' "$p" ;;
   esac
@@ -411,11 +428,9 @@ command -v "$EGO_BIN" >/dev/null 2>&1 || { echo "错误: 找不到 ${EGO_BIN}（
 heal_skill_entry
 
 TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ego-decision-layer.XXXXXX")"
-# Windows（Git Bash / MSYS）下 mktemp 给的是 /c/tmp/...，而 ego 的内嵌 node 会把同一串解析成
-# C:\tmp\...，父进程写好的 config.json 在子进程里就找不到了。转成混合路径（C:/tmp/...）两边都认。
-case "$(uname -s 2>/dev/null)" in
-  MINGW*|MSYS*|CYGWIN*) TMPD="$(cygpath -m "$TMPD" 2>/dev/null || printf '%s' "$TMPD")" ;;
-esac
+# 临时文件与缓存都必须按父/子进程一致的文件路径解释。
+TMPD="$(_runtime_path "$TMPD")"
+CACHE_FILE="$(_runtime_path "${EGO_JEV_CACHE_FILE:-$HOME/.config/ego-decision-layer/action-cache.json}")"
 trap 'rm -rf "$TMPD"' EXIT
 
 # 路由状态（只读，不起浏览器）：作为 route 段写进结果 JSON，也进 renderJevSummary
@@ -430,7 +445,7 @@ JEV_FORCE_VIEWPORT="$FORCE_VIEWPORT" JEV_STRICT_VIEWPORT="$STRICT_VIEWPORT" \
 JEV_BASE_URL="${TYPESAFE_BASE_URL:-}" JEV_FALLBACK_BASE_URL="${TYPESAFE_FALLBACK_BASE_URL:-}" \
 JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" \
 JEV_EXTRACT_INSTRUCTION="$EXTRACT_INSTRUCTION" JEV_EXTRACT_SCHEMA="$EXTRACT_SCHEMA_CONTENT" \
-JEV_USE_CACHE="$USE_CACHE" JEV_CACHE_FILE="${EGO_JEV_CACHE_FILE:-$HOME/.config/ego-decision-layer/action-cache.json}" \
+JEV_USE_CACHE="$USE_CACHE" JEV_CACHE_FILE="$CACHE_FILE" \
 JEV_USE_BATCH="$USE_BATCH" JEV_USE_VISUAL="$USE_VISUAL" \
 JEV_ROUTE_FILE="$ROUTE_JSON" JEV_ENGINE_LIB="$LIB_URL" \
 node --input-type=module -e '
