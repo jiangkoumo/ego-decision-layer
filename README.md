@@ -4,17 +4,18 @@
 
 **给 ego lite 的可插拔决策层：默认 System One（Jev），可换本地 / 其他 OpenAI 兼容后端；执行层带 fail-closed 护栏。**
 
-> **为什么是这一个**：差异只有一条 —— **它是被测量的**。本机 2026-09-26 全量复跑 **16 套测试 / 429 项检查**
-> （除 `native-select` 是成功率测量外全部 exit 0）；原始数据在 [`bench/raw/`](bench/raw)，每个数字都能用仓库里的
-> 脚本复算；[`CHANGELOG.md`](CHANGELOG.md) 里记着**被实测推翻的旧结论**（包括我们自己先前公布的口径错误）；
-> 执行层是 **fail-closed**（陈旧 ref、被遮挡、跨 frame 命中失败、危险动作一律 **0 次派发**）；
-> 代码级溯源登记在 [`THIRD-PARTY.md`](THIRD-PARTY.md)。
+> **当前能力**：线性操作闭环、结构化抽取、动作缓存、批处理和 Canvas/SVG 图形区域兜底。
+> 各能力都有对应测试，见[功能验证](#功能验证)；历史性能数据的条件与复跑脚本见[测量与复跑基准](#测量与复跑基准)。
+> [`CHANGELOG.md`](CHANGELOG.md) 保留修复记录和被实测推翻的旧结论，代码级溯源见 [`THIRD-PARTY.md`](THIRD-PARTY.md)。
+> **最新版 `v0.9.1`**：包含五个阶段的能力与 Windows 路径修复；[发布页](https://github.com/jiangkoumo/ego-decision-layer/releases/latest)提供对应源码下载。不同安装方式的更新规则见[下载与更新渠道](#下载与更新渠道)。
 
 > English summary: `ego-decision-layer` replaces the per-step LLM round trip in browser automation with
 > [TypeSafe](https://docs.typesafe.ai)'s System One model **Jev**. Jev reads one *indexed element
 > table* and answers, in a single request, both the **operation** (`click` / `type_text` / `select` /
 > `scroll_up` / `scroll_down` / `wait` / `done` / `blocked`) and the **target element**. Code owns
-> observation, execution, verification and exit conditions.
+> observation, execution, verification and exit conditions. The engine also provides schema-validated
+> extraction, guarded action replay, action batches, and a Canvas/SVG region fallback with an injectable
+> grounder. Region detection alone does not interpret image pixels.
 >
 > Measured after the engine rebuild: HN two-step navigation **4569ms → 1916ms** on the same task, and
 > against browser-harness + jev-ultrafast over 100 pre-registered paired rounds — click chain
@@ -40,7 +41,18 @@
 
 ## 能做什么
 
-每条都带一个实测数字或明确边界；数字的测量条件见[测量与复跑基准](#测量与复跑基准)。
+当前能力与边界如下；性能数字来自特定历史运行，测量条件见[测量与复跑基准](#测量与复跑基准)。
+
+| 能力 | 入口 | 行为与边界 |
+| --- | --- | --- |
+| 页面稳定等待 | `settle()` | 用 MutationObserver 辅助判断 DOM 静默，并保留有界导航等待；不保证未来不会出现延迟渲染 |
+| 结构化抽取 | `--extract`、`--schema`、`extract()` | 主文档语义流交给文本模型，结果按 Schema 子集校验；关键内容仍需业务核验 |
+| 动作缓存 | `--cache` / `--no-cache`、`ActionCache` | CLI 默认开启；完整 URL、控件状态、输入候选与任务上下文参与身份校验，命中跳过模型请求；无可验证进展时作废并停止 |
+| 多动作批处理 | `--batch` / `--no-batch` | 执行后端返回的动作序列，批次末尾统一等待；默认 Jev 不会因开启选项就自动生成多动作序列 |
+| 图形区域兜底 | `--visual-fallback` / `--no-visual-fallback`、`visualGrounder` | DOM 无目标时扫描 Canvas/SVG 等区域；定位器可注入。默认单区域点击中心，不内置图像识别模型 |
+| Windows 路径兼容 | `main`，PR #2 | 处理 Git Bash/MSYS/Cygwin 的引擎导入、临时目录和缓存路径，保留 UNC authority；UNC 共享端到端未验证 |
+
+缓存命中的 `decideMs = 0` 仅表示跳过模型决策，整步仍有观测、校验和派发开销。
 
 - **多步线性任务一条命令闭环**：连续点击、翻页、搜索表单提交、导航跳转。Hacker News 两步导航
   A/B 对照中位 **4.9s**（1 进程）对经典循环 **9.7s**（3 进程）。
@@ -98,6 +110,33 @@ cd ego-decision-layer
 ./install.sh --no-wire  # 只装 CLI，不接管（旧行为）
 ./install.sh --test     # 顺带跑一次端到端冒烟测试
 ```
+
+### 下载与更新渠道
+
+`metadata.version` 当前为 `0.9.1`。Windows 路径修复来自 PR #2（合并提交 `76ee335`），已包含在 `v0.9.1`。
+标签对应固定提交；`main` 会继续演进，后续修复合并后可能先于下一个标签提供。
+
+| 获取方式 | 是否包含 PR #2 的 Windows 修复 |
+| --- | --- |
+| 新 `git clone`，默认分支 `main` | 是 |
+| 跟踪 `main` 的克隆执行 `git pull --ff-only` / `./update.sh` | 更新成功后包含；工作区有改动时更新脚本会跳过 pull |
+| GitHub 下载 `main` 的 ZIP | 是，内容以下载时的 `main` 为准 |
+| 下载 `v0.9.1` 发布页或标签的 ZIP/tar.gz | 是 |
+| 下载 `v0.9.0` 标签的 ZIP/tar.gz，或固定该标签/更早提交 | 否，需要更新到 `v0.9.1` 或含修复的提交 |
+| `npx skills add jiangkoumo/ego-decision-layer` | 未固定 ref 时获取仓库默认分支；已有拷贝需要重新安装更新，不会随合并自动变化 |
+| Claude Code 插件市场安装 | 已安装的插件可能仍使用缓存；需更新 marketplace 和已安装插件，再核对其实际代码 |
+
+克隆安装可查看实际提交：
+
+```bash
+git branch --show-current
+git log -1 --oneline
+git merge-base --is-ancestor 76ee335 HEAD  # exit 0 表示当前提交包含该 Windows 修复
+```
+
+Windows 使用 Bash（Git Bash / MSYS / Cygwin）运行 CLI 和安装脚本；这些 `.sh` 脚本不是原生 PowerShell 命令。
+PR #2 的贡献者在 Windows 11、Node v24.20.0、ego-browser 0.6.0.16 上验证了路径测试、默认缓存复用和自定义缓存位置。
+UNC 路径转换及 Windows Node 解析已验证，但没有可达网络共享用于端到端测试。
 
 ### 从 ego-jev 迁移（0.4.0）
 
@@ -268,6 +307,10 @@ bash "<技能目录>/scripts/wire-agent-skills.sh" --check   # 期望：exit 0�
 grep -l "先路由" ~/.agents/skills/ego-browser/SKILL.md     # 期望：打印出路径
 ```
 
+**核对结果时**：`success: true` 可能来自 `jev_done`，不能单凭 exit 0 认定 `--until` 已命中。
+上面的搜索任务还应确认输出 `url` 包含 `/wiki/Jev`，并查看 `reason` 是否为 `check_passed` / `check_passed_after_step`。
+Windows 贡献者报告某些环境下英文首页搜索框为 0×0；可尝试 `https://www.wikipedia.org/`，但可能进入搜索结果页，仍需核对最终 URL。
+
 **没凭证也能先自测**：`ego-browser nodejs < bench/test-offline-e2e.mjs` 在 `about:blank` 上注入 DOM，
 用 `options.ask` 注入确定性判定器（不联网、不需要 key），但观测、`locate`、裸 CDP 派发、结果断言
 全走真实路径；失败时能分清是引擎坏了还是凭证/网络问题。
@@ -321,7 +364,7 @@ CLI 收尾会打印一行分阶段耗时与**服务端实际模型版本**（`re
 在 `ego-browser nodejs` 脚本里复用引擎：
 
 ```js
-import { runJevAutonomousLoop } from "/path/to/ego-decision-layer/scripts/decider-loop.mjs";
+const { runJevAutonomousLoop } = await import("/absolute/path/to/ego-decision-layer/scripts/decider-loop.mjs");
 
 const result = await runJevAutonomousLoop(page, "先打开 new 页面，再打开 comments 页面", {
   maxSteps: 8,
@@ -349,6 +392,70 @@ mkdir -p ~/.agents/skills/ego-decision-layer && ln -sfn "$PWD/SKILL.md" ~/.agent
 > **不要**把 Jev 章节加进 ego lite 应用包里的 `SKILL.md`。那是供应商受签名的应用包，
 > 升级会替换 `Resources/ego-skills/` 目录（版本号目录都会换），改动必然丢失。
 > 本技能刻意放在包外，升级后无需重做。
+
+## 结构化抽取、缓存与批处理
+
+抽取可以独立运行，也可接在操作任务之后。纯抽取需要文本模型配置，无需单独提供 Jev Key；操作加抽取则需要对应的两个后端可用。
+
+```bash
+# 从当前加载的页面抽取严格 3 项 JSON
+ego-decision-layer --url "https://news.ycombinator.com" \
+  --extract "提取前3条新闻的标题和绝对链接" \
+  --schema '{"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","properties":{"title":{"type":"string"},"url":{"type":"string"}},"required":["title","url"]}}'
+
+# 操作成功后再抽取；--schema 也接受 JSON 文件路径
+ego-decision-layer --url "https://news.ycombinator.com" --until "/newcomments" \
+  "先打开 new 页面，再打开 comments 页面" \
+  --extract "提取前3条评论的正文" --schema '[{"text":"string"}]'
+
+# 关闭缓存、批处理和图形区域兜底，排查单动作路径
+ego-decision-layer --no-cache --no-batch --no-visual-fallback \
+  --url "https://news.ycombinator.com" --until "/newcomments" "打开 comments 页面"
+```
+
+Schema 支持 `type`、`properties`、`items`、`required`、`enum`、`minItems`、`maxItems`、布尔型 `additionalProperties`，
+以及 `{title: "string"}` / `[{title: "string"}]` 等简写。不支持的特性会显式失败。
+抽取数据类型正确不等于条目完整或事实正确；需要固定数量时写明 `minItems` / `maxItems`，重要字段用同页 DOM 或业务数据核验。
+JS 接口 `extract(page, instruction, {schema, selector})` 可限定区域；选择器无效或不存在时失败，不会扩大到整个页面。
+
+CLI 缓存默认位于 `~/.config/ego-decision-layer/action-cache.json`，用 `EGO_JEV_CACHE_FILE` 覆盖。
+`--no-cache` 禁止本次回放。缓存动作仍受执行层护栏约束；回放后结果不明时会停止，避免重复副作用。
+
+批处理需要自定义 `ask` / `decider` 返回 `{action: "batch", subActions: [...]}`，子动作可填入本次观测得到的 ref 与文本。
+它不是事务：预检发现危险动作会整批拒绝，但中途失败时已经执行的输入不会回滚。
+检查结果中的 `executedSubActions` 和 `failedSubActionIndex`，再决定后续操作；不要整批盲重试。
+接口和注入示例见 [`SKILL.md`](SKILL.md) 与 [`bench/test-multi-action-batch.mjs`](bench/test-multi-action-batch.mjs)。
+
+图形区域兜底的 `visualGrounder(page, goal, context)` 可返回 `{action: "click_visual", x, y, label}`。
+调用方负责图像理解与坐标定位；仅扫描区域几何信息无法识别 Canvas 内部按钮。没有定位器时，单区域会点击中心，多区域会等待。
+可用 `--no-visual-fallback` 关闭；当前坐标通道的视口检查与标签词表不等同于语义动作的完整 DOM 命中护栏。
+
+## 功能验证
+
+从仓库根目录执行。纯 Node 测试不需要浏览器或凭证：
+
+```bash
+node bench/test-windows-paths.mjs       # Windows 路径与缓存转换分支
+node bench/test-extract-http.mjs        # 抽取 HTTP 协议、Schema、错误响应
+node bench/test-guardrails.mjs
+node bench/test-release-consistency.mjs
+```
+
+浏览器离线测试需要已运行的 ego lite，用合成 DOM 和注入决策器，不调用外部模型：
+
+```bash
+ego-browser nodejs < bench/test-settle-mutation.mjs
+ego-browser nodejs < bench/test-extract.mjs
+ego-browser nodejs < bench/test-action-cache.mjs
+ego-browser nodejs < bench/test-multi-action-batch.mjs
+ego-browser nodejs < bench/test-visual-fallback.mjs
+ego-browser nodejs < bench/test-offline-e2e.mjs
+```
+
+这些脚本的默认导入路径指向 `~/.agents/skills/ego-decision-layer`，应先确认该技能指向待测代码。
+PR #2 只修复 CLI；部分浏览器 bench 脚本仍使用 POSIX 导入路径，尚未统一适配 Windows。
+真实网络的冷／热缓存及更换输入测试见 [`bench/test-action-cache-live.mjs`](bench/test-action-cache-live.mjs)，需要浏览器、网络和 Jev 凭证。
+离线测试通过不能替代真实后端、真实站点或 UNC 网络共享上的验证。
 
 ## 文本生成（可选）
 
@@ -433,7 +540,11 @@ ego-decision-layer --decider openai-compatible \
 
 | reason | 含义 |
 | --- | --- |
-| `check_passed` / `jev_done` | 成功 |
+| `check_passed` / `check_passed_after_step` | 确定性检查命中 |
+| `jev_done` | 模型判断完成；仍应核对业务条件 |
+| `extracted` | 抽取结果通过结构校验；内容仍需核验 |
+| `schema_validation_failed` | 抽取结果不满足 Schema，例如类型或条目数不符 |
+| `cache_replay_unverified` / `action_outcome_unknown` | 缓存回放无可验证进展或动作结果未知；作废并停止，核验后再继续 |
 | `blocked` | Jev 判定验证码/登录墙/无可用推进手段 |
 | `no_progress` | 连续 5 次变更类动作页面无变化 |
 | `stuck` | 同一动作连续 3 次无变化（含反复滚动；原生下拉重问仍失败也归这里） |
@@ -598,7 +709,8 @@ SKILL.md                 技能本体（刻意放在根目录——`npx skills a
 CHANGELOG.md             版本历史（顶部条目必须与 SKILL.md 的 metadata.version 一致）
 AGENTS.md                给其他 Agent 的安装/验证指令（可直接粘贴的 prompt 在里面）
 scripts/decider-loop.mjs  引擎
-scripts/ego-decision-layer CLI（自动在 同目录 / 仓库根 / ~/.agents/lib 里找引擎）
+scripts/ego-decision-layer CLI（操作、抽取、缓存、批处理、图形兜底；含 Windows 路径转换）
+ROADMAP.md               演进规划、阶段实现与验证边界
 scripts/wire-agent-skills.sh   接管/刷新官方 ego-browser 入口；--check / --restore / --ensure / --status-json / --always-on
 overlay/ego-browser/     路由层的模板（接管时渲染到 Agent 技能目录）
 .claude-plugin/          Claude Code 插件元数据（plugin.json / marketplace.json）
