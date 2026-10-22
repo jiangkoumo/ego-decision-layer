@@ -81,6 +81,48 @@
 每步动作后注入的说明条取自真实的 `runJevStep` 结果（不是写死「成功」）。重做命令见
 [`docs/README.md`](docs/README.md)。
 
+## Usage
+
+**怎么用**：装好后，给出**起始网址、操作目标和成功条件**即可。首次使用先完成[安装](#安装)；默认 Jev 后端需要 ego lite / `ego-browser` 和 [TypeSafe 凭证](#凭证必须落盘成文件)，也可[切换本地决策模型](#决策后端decider默认-system-one可换本地模型)。
+
+**交给 Agent**：安装技能后，直接发送下面这段话：
+
+> 用 ego-decision-layer 打开 https://en.wikipedia.org/wiki/Main_Page，在搜索框输入 Jev 并提交。
+> 输入候选用 `--text "Jev"`，成功条件用 `--until "/wiki/Jev"`，最多 5 步。
+> 完成后报告最终 URL、reason 和退出码。
+
+**自己运行**：以下以用户级安装到 `~/.agents/skills/ego-decision-layer/` 为例；装在其他目录时替换该路径。
+克隆仓库的用户可在仓库根目录改用 `./scripts/ego-decision-layer`；已加入 PATH 时直接用 `ego-decision-layer`。
+
+```bash
+"$HOME/.agents/skills/ego-decision-layer/scripts/ego-decision-layer" \
+  --url "https://en.wikipedia.org/wiki/Main_Page" \
+  --text "Jev" --until "/wiki/Jev" --steps 5 \
+  "在顶部搜索框输入 Jev 并提交"
+```
+
+输入内容由 `--text` 提供，这个例子无需另配文本生成模型。要换成连续点击任务，可以运行：
+
+```bash
+"$HOME/.agents/skills/ego-decision-layer/scripts/ego-decision-layer" \
+  --url "https://news.ycombinator.com" \
+  --until "/newcomments" --steps 5 \
+  "先打开 new 页面，再打开 comments 页面"
+```
+
+| 参数 | 填什么 |
+| --- | --- |
+| `--url` | 起始页面的网址 |
+| `--text` | 要填入的文本；多个候选可重复传入 |
+| `--until` | 最终 URL 应包含的子串，例如 `/wiki/Jev` |
+| `--steps` | 最大操作步数，默认 10 |
+
+**怎么看结果**：命令末尾打印结果 JSON。搜索例子应同时满足 `success: true`、`url` 包含 `/wiki/Jev`，且 `reason` 为 `check_passed` 或 `check_passed_after_step`。
+单独的 `jev_done` 表示模型判断完成，仍需核对最终 URL。退出码 `0` 表示运行成功，`1` 表示未达成，`2` 表示参数错误，`3` 表示缺少 Jev 凭证。
+成功后默认关闭本次 TaskSpace；需要查看页面时加 `--keep-space`。失败时保留 TaskSpace，可用结果中的 `spaceId` 排查。
+
+更多示例：[复用已有页面与 JS API](#用法)、[结构化数据抽取](#结构化抽取缓存与批处理)、[文本生成配置](#文本生成可选)。完整参数运行 `ego-decision-layer --help` 查看。
+
 ## 安装
 
 ### 方式 1：skills CLI（推荐，一行）
