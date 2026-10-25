@@ -140,6 +140,9 @@ USAGE() {
 
 选项:
   --url <url>        先导航到的网址
+  --cdp-endpoint <url>
+                     用普通 Node 连接外部 Chrome 的 HTTP(S) 或浏览器 WebSocket CDP 地址；
+                     创建独立页面，保留外部浏览器；需要 Node 22+，无需 ego lite
   --space <id>       复用已有 taskSpace（默认新建，不会抢占用户的 space）
   --extract <instr>  结构化数据抽取指令（在导航后或目标操作完成后执行抽取，输出结构化 JSON）
   --schema <json|file>
@@ -325,10 +328,13 @@ validate_force_viewport() {
 }
 
 TARGET_URL=""; SPACE_ID=""; MAX_STEPS="10"; UNTIL=""; KEEP=""; KEEP_SPACE="0"; API_KEY_OVERRIDE=""; GOAL=""; TEXTS=(); ROUTE_STATUS=0; HANDOFF=0; HANDOFF_JSON=0; FORCE_VIEWPORT=""; STRICT_VIEWPORT="0"
-DECIDER_KIND=""; DECIDER_BASE_URL=""; DECIDER_MODEL=""; EXTRACT_INSTRUCTION=""; EXTRACT_SCHEMA=""; USE_CACHE="1"; USE_BATCH="1"; USE_VISUAL="1"
+DECIDER_KIND=""; DECIDER_BASE_URL=""; DECIDER_MODEL=""; EXTRACT_INSTRUCTION=""; EXTRACT_SCHEMA=""; USE_CACHE="1"; USE_BATCH="1"; USE_VISUAL="1"; CDP_ENDPOINT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url) TARGET_URL="$2"; shift 2 ;;
+    --cdp-endpoint)
+      [ $# -ge 2 ] && [ -n "$2" ] || { echo "错误: --cdp-endpoint 需要 CDP 地址" >&2; exit 2; }
+      CDP_ENDPOINT="$2"; shift 2 ;;
     --space) SPACE_ID="$2"; shift 2 ;;
     --cache) USE_CACHE="1"; shift ;;
     --no-cache) USE_CACHE="0"; shift ;;
@@ -390,6 +396,22 @@ if [[ "$ROUTE_STATUS" == "1" ]]; then
   exec bash "$ROUTE_WIRE" --status-json
 fi
 
+if [[ -n "$CDP_ENDPOINT" ]]; then
+  if [[ -n "$SPACE_ID" || -n "$KEEP" ]]; then
+    echo "错误: --cdp-endpoint 不支持 --space / --keep；保留新建页面请用 --keep-space" >&2
+    exit 2
+  fi
+  if ! command -v node >/dev/null 2>&1 || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' 2>/dev/null; then
+    echo "错误: --cdp-endpoint 需要 Node 22+（包含原生 WebSocket），请安装或升级 Node" >&2
+    exit 2
+  fi
+  if ! node -e 'try { const u = new URL(process.argv[1]); if (!["http:","https:","ws:","wss:"].includes(u.protocol)) process.exit(1); } catch { process.exit(1); }' -- "$CDP_ENDPOINT"; then
+    echo "错误: --cdp-endpoint 需要 HTTP(S) 或 WebSocket URL" >&2
+    exit 2
+  fi
+  [ -f "$SCRIPT_DIR/run-cdp-task.mjs" ] || { echo "错误: 缺少 scripts/run-cdp-task.mjs，请更新完整安装" >&2; exit 2; }
+fi
+
 if [[ "$FORCE_VIEWPORT" != "" ]] && ! validate_force_viewport "$FORCE_VIEWPORT"; then
   echo "错误: --force-viewport 参数非法（得到 \"${FORCE_VIEWPORT}\"）；期望 <宽>x<高>[@缩放]，例如 1280x900 或 1280x900@2" >&2
   exit 2
@@ -449,10 +471,11 @@ if [[ -n "$EXTRACT_INSTRUCTION" ]]; then
     exit 3
   fi
 fi
-command -v "$EGO_BIN" >/dev/null 2>&1 || { echo "错误: 找不到 ${EGO_BIN}（ego lite 是否已安装？）" >&2; exit 2; }
-
-# 参数与凭证都合法后才动手（错误路径不写盘）
-heal_skill_entry
+if [[ -z "$CDP_ENDPOINT" ]]; then
+  command -v "$EGO_BIN" >/dev/null 2>&1 || { echo "错误: 找不到 ${EGO_BIN}（ego lite 是否已安装？）" >&2; exit 2; }
+  # ego 模式参数与凭证都合法后才刷新技能入口。
+  heal_skill_entry
+fi
 
 TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ego-decision-layer.XXXXXX")"
 # 临时文件与缓存都必须按父/子进程一致的文件路径解释。
@@ -467,7 +490,7 @@ write_route_status "$ROUTE_JSON"
 # 用 node 生成 JSON，避免 shell 转义问题（goal 里的引号/换行/$ 都安全）
 JEV_GOAL="$GOAL" JEV_URL="$TARGET_URL" JEV_UNTIL="$UNTIL" JEV_KEEP="$KEEP" \
 JEV_STEPS="$MAX_STEPS" JEV_KEY="$API_KEY_OVERRIDE" JEV_SPACE="$SPACE_ID" \
-JEV_KEEP_SPACE="$KEEP_SPACE" JEV_CONFIG_OUT="$TMPD/config.json" \
+JEV_KEEP_SPACE="$KEEP_SPACE" JEV_CDP_ENDPOINT="$CDP_ENDPOINT" JEV_CONFIG_OUT="$TMPD/config.json" \
 JEV_FORCE_VIEWPORT="$FORCE_VIEWPORT" JEV_STRICT_VIEWPORT="$STRICT_VIEWPORT" \
 JEV_BASE_URL="${TYPESAFE_BASE_URL:-}" JEV_FALLBACK_BASE_URL="${TYPESAFE_FALLBACK_BASE_URL:-}" \
 JEV_DECIDER_KIND="$DECIDER_KIND" JEV_DECIDER_BASE_URL="$DECIDER_BASE_URL" JEV_DECIDER_MODEL="$DECIDER_MODEL" \
@@ -489,6 +512,8 @@ node --input-type=module -e '
     extractSchema: process.env.JEV_EXTRACT_SCHEMA || null,
     // Resolve parent environment config paths before ego strips custom variables.
     extractionModel: process.env.JEV_EXTRACT_INSTRUCTION ? engine.resolveExtractionModel({deciderConfig}) : null,
+    cdpEndpoint: process.env.JEV_CDP_ENDPOINT || null,
+    engineModule: process.env.JEV_ENGINE_LIB,
     url: process.env.JEV_URL || null,
     until: process.env.JEV_UNTIL || null,
     keep: process.env.JEV_KEEP || null,
@@ -515,6 +540,11 @@ node --input-type=module -e '
 ' -- "${TEXTS[@]+"${TEXTS[@]}"}"
 
 CFG="$TMPD/config.json"
+
+if [[ -n "$CDP_ENDPOINT" ]]; then
+  node "$(_runtime_path "$SCRIPT_DIR/run-cdp-task.mjs")" --config "$CFG"
+  exit $?
+fi
 
 "$EGO_BIN" nodejs <<EOF
 const { readFile } = await import("node:fs/promises");

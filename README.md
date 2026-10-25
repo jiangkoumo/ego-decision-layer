@@ -125,6 +125,27 @@
 
 更多示例：[复用已有页面与 JS API](#用法)、[结构化数据抽取](#结构化抽取缓存与批处理)、[文本生成配置](#文本生成可选)。完整参数运行 `ego-decision-layer --help` 查看。
 
+### 外部 Chrome（开发分支）
+
+当前开发分支新增 `--cdp-endpoint`，让普通 Node 连接已启用远程调试的外部 Chrome；需要 Node 22+。
+默认 ego lite 入口继续使用 `ego-browser`。CDP 模式不需要 ego lite，也不刷新 Agent 的 ego-browser 路由。
+
+```bash
+./scripts/ego-decision-layer --cdp-endpoint http://127.0.0.1:9222 \
+  --url "https://en.wikipedia.org/wiki/Main_Page" \
+  --text "Jev" --until "/wiki/Jev" --steps 5 \
+  "type Jev into the search box and submit"
+```
+
+CDP 连接创建自己的页面，保留外部浏览器及其原有标签页。`--space` / `--keep` 属于 ego TaskSpace，不能与
+`--cdp-endpoint` 混用；需要保留新页面供检查时使用 `--keep-space`。默认 Jev 仍需 TypeSafe 凭证，
+也可使用已有的 OpenAI 兼容决策配置。此入口已完成双宿主受控任务验收，未包含在 `v0.10.0` 发布中。
+
+开发验证入口为 `node bench/test-host-integration-live.mjs --suite`（Node 22+、Chrome、Jev 凭证）。
+它创建临时 Chrome 与受控表单，跑共同任务集、真实 Jev 的 HN 导航和表单提交，再验证共享 CLI 与资源清理。
+Chrome 路径用 `EGO_CDP_CHROME` 覆盖。加 `--wiki` 可测 Wikipedia 搜索；该站在 5 步预算下实测有成功也有失败，
+目前不作为稳定验收门槛。共同任务集使用注入判定器，其通过数不能当成模型或真实站点成功率。
+
 ## 安装
 
 ### 方式 1：skills CLI（推荐，一行）
