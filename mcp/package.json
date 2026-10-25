@@ -1,0 +1,15 @@
+{
+  "name": "ego-decision-layer-mcp",
+  "private": true,
+  "type": "module",
+  "description": "Optional stdio MCP entry for the existing CDP task runner",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test-stdio.mjs",
+    "test:live": "node test-live.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}
