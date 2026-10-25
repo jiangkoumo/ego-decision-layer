@@ -62,6 +62,19 @@ Verify all three: exit code `0`, `success: true`, and a final URL containing `/w
 
 Exit codes: `0` success, `1` goal not reached, `2` invalid arguments, `3` missing Jev credentials. Successful tasks close their TaskSpace by default. Failed tasks retain it for inspection and report its ID. Prefer URL paths or DOM state over UI-string checks, because automatic translation can change labels.
 
+## External Chrome (in development)
+
+The development branch adds `--cdp-endpoint` to connect from ordinary Node to an external Chrome with remote debugging enabled. It requires Node 22+. The default ego lite entry continues to use `ego-browser`.
+
+```bash
+./scripts/ego-decision-layer --cdp-endpoint http://127.0.0.1:9222 \
+  --url "https://en.wikipedia.org/wiki/Main_Page" \
+  --text "Jev" --until "/wiki/Jev" --steps 5 \
+  "type Jev into the search box and submit"
+```
+
+CDP mode creates its own page and leaves the external browser and existing tabs open. Use `--keep-space` to retain the new page for inspection. Ego TaskSpace options `--space` and `--keep` cannot be combined with CDP mode. This path does not require ego lite or refresh agent routing. Jev credentials or an OpenAI-compatible decision backend are still required. Controlled tasks have passed on both hosts; this entry is not part of the v0.10.0 release. Run `node bench/test-host-integration-live.mjs --suite` with Node 22+, Chrome and Jev credentials to reproduce controlled acceptance, live HN navigation, form submission and shared CLI integration. Set `EGO_CDP_CHROME` to override the Chrome executable. Optional `--wiki` adds Wikipedia search, which has both succeeded and failed within a five-step budget.
+
 ## Update an installation
 
 Version 0.10.0 introduces:
@@ -87,7 +100,7 @@ Git installations fast-forward from the current branch's upstream. Skill copies 
 | Action batches | Execute backend-provided action sequences with preflight guards and one final settle; default Jev does not automatically generate batches |
 | Canvas/SVG fallback | Scan geometric regions and accept an injected `visualGrounder`; the default single-region strategy clicks its center and does not interpret image pixels |
 | Decision backends | Default System One; configurable OpenAI-compatible backends retain execution guards but do not provide calibrated confidence |
-| Host support | ego lite today; external Chrome CDP and MCP are planned |
+| Host support | ego lite; external Chrome CDP has passed controlled acceptance in development; MCP is planned |
 
 A cache hit with `decideMs = 0` only means the model request was skipped. Observation, validation and execution still take time. Actions with uncertain outcomes stop rather than being blindly replayed. Keyword guards are heuristic, cross-origin iframes are unsupported, and real CAPTCHA handling has not been validated.
 
