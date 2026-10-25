@@ -107,6 +107,15 @@ function normalizeConfig(cfg) {
     throw new CdpTaskError("配置缺少 goal 或 extractInstruction（至少要有操作目标或抽取指令）");
   }
 
+  // until 是「给操作循环用的确定性退出条件」：没有 goal 就没有可验证的操作，
+  // 只配 until 会让最终 URL 复核整条被跳过，纯抽取任务于是可能以 success:true 收场。
+  const until = typeof cfg.until === "string" && cfg.until ? cfg.until : null;
+  if (until && !goal) {
+    throw new CdpTaskError(
+      "until 只能配 goal 使用：纯抽取任务没有操作循环，无法用 URL 证明达成（请去掉 until，改用 extractSchema 校验结果）"
+    );
+  }
+
   const rawSteps = cfg.steps === undefined || cfg.steps === null || cfg.steps === "" ? 10 : Number(cfg.steps);
   if (!Number.isSafeInteger(rawSteps) || rawSteps < 1 || rawSteps > 200) {
     throw new CdpTaskError(`steps 必须是 1..200 的整数（得到 ${JSON.stringify(cfg.steps)}）`);
@@ -143,7 +152,7 @@ function normalizeConfig(cfg) {
     cdpEndpoint,
     connectTimeoutMs,
     url: typeof cfg.url === "string" && cfg.url ? cfg.url : null,
-    until: typeof cfg.until === "string" && cfg.until ? cfg.until : null,
+    until,
     texts: Array.isArray(cfg.texts) ? cfg.texts.filter((t) => typeof t === "string") : [],
     cache: cfg.cache !== false,
     cacheFile: typeof cfg.cacheFile === "string" && cfg.cacheFile ? cfg.cacheFile : null,
@@ -332,7 +341,10 @@ function actionRecord(entry, index) {
   const subActions = Array.isArray(entry?.executedSubActions) ? entry.executedSubActions : null;
 
   // 子动作已派发过就是已派发：批次中途被拦（例如后续子动作命中危险词表）不能退成「确认未派发」。
-  const batchPartial = Boolean(subActions && Number.isSafeInteger(entry?.batchSize) && subActions.length < entry.batchSize);
+  // 但「一个子动作都没派发」不算 partial（executedSubActions: [] 时 length===0）。
+  const batchPartial = Boolean(
+    subActions && subActions.length > 0 && Number.isSafeInteger(entry?.batchSize) && subActions.length < entry.batchSize
+  );
   let dispatched;
   if (subActions) dispatched = subActions.length > 0;
   else if (noDispatchProof) dispatched = false;
@@ -702,11 +714,15 @@ export async function runCdpTask(cfg, deps = {}) {
     result.modelDone = Boolean(modelDone);
     result.steps = loopResult ? loopResult.steps ?? null : config.goal ? null : 0;
     result.actions = summarizeActions(loopResult?.history);
+    const historyErrors = Array.isArray(loopResult?.history)
+      ? loopResult.history.filter((entry) => entry && entry.error).map((entry) => errorText(entry.error))
+      : [];
     result.extracted = Boolean(extractResult);
     result.extractSkipped = extractSkipped;
     result.data = extractResult?.data ?? null;
     result.schema = extractResult?.schema ?? null;
-    result.error = extractResult?.error ?? null;
+    // 抽取错误优先；没有抽取（或抽取没报错）时回退到真实单步错误，不让 result.error 永远是 null。
+    result.error = extractResult?.error ?? (historyErrors.length ? historyErrors[historyErrors.length - 1] : null);
     result.phases = extractResult?.phases || loopResult?.phases || null;
     result.cacheHits = loopResult?.cacheHits ?? 0;
     result.cacheHeals = loopResult?.cacheHeals ?? 0;
@@ -719,7 +735,9 @@ export async function runCdpTask(cfg, deps = {}) {
     result.outcomeUnknown =
       loopReason === "action_outcome_unknown" ||
       loopReason === "cache_replay_unverified" ||
-      Boolean(loopResult?.history?.some?.((entry) => entry?.cacheRecovery === "action_outcome_unknown"));
+      Boolean(loopResult?.history?.some?.((entry) => entry?.cacheRecovery === "action_outcome_unknown")) ||
+      // 聚合单步未知证据：任何一步「可能已产生副作用但未核实」/ 批次部分执行都要上报。
+      Boolean(Array.isArray(result.actions) && result.actions.some((record) => record.outcomeUnknown || record.batchPartial));
 
     // 取消发生在收尾阶段（引擎已返回确定性结论）：保留确定性结论，但显式标记取消。
     if (controller.signal.aborted) {

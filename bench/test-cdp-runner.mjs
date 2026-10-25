@@ -136,6 +136,17 @@ console.log("\n[1] 配置校验（错误路径不加载适配器、不连浏览�
     await expectConfig("steps 非数字 → exit 2", baseCfg({ steps: "abc" }), {}, "steps");
     await expectConfig("CDP 模式带 spaceId → exit 2", baseCfg({ spaceId: "3" }), {}, "taskSpace");
     await expectConfig("CDP 模式带 keep → exit 2", baseCfg({ keep: "p1" }), {}, "keep");
+    // until 是操作循环的退出条件：没有 goal 就没有可验证的操作，不能拿 until 假装验收。
+    await expectConfig("纯抽取 + until（无 goal）→ exit 2", baseCfg({ goal: undefined, extractInstruction: "抽取标题", until: "/wiki/Jev" }), {}, "until");
+    {
+      const host = makeHost();
+      try {
+        await runCdpTask(baseCfg({ goal: undefined, extractInstruction: "抽取标题", until: "/x" }), { connectCdpHost: host.connectCdpHost, engine: makeEngine(loopScript({})), ...noSignals });
+        check("纯抽取 + until 不会连浏览器", false, "没有抛错");
+      } catch (err) {
+        check("纯抽取 + until 连浏览器前就失败（0 次连接/0 次抽取）", err instanceof CdpTaskError && err.exitCode === 2 && host.calls.connect.length === 0, `${err && err.exitCode} connect=${host.calls.connect.length}`);
+      }
+    }
   }
 }
 
@@ -204,6 +215,7 @@ if (typeof runCdpTask === "function") {
     check("抽取成功的整体结论 = extracted", r.reason === "extracted" && r.extracted === true && r.data && r.data.ok === 1, JSON.stringify({ reason: r.reason, extracted: r.extracted, data: r.data }));
     check("phases 透传（分阶段耗时）", r.phases && r.phases.decideMs === 2, JSON.stringify(r.phases));
     check("serverModels 透传（服务端实际模型）", Array.isArray(r.serverModels) && r.serverModels[0] === "jev-test", JSON.stringify(r.serverModels));
+    check("干净成功 → error=null 且 outcomeUnknown=false（聚合不误报）", r.error === null && r.outcomeUnknown === false, JSON.stringify({ error: r.error, outcomeUnknown: r.outcomeUnknown }));
   }
 
   // ── [3] 模型 done 与 until 未命中 ───────────────────────────────────────────
@@ -474,6 +486,9 @@ if (typeof runCdpTask === "function") {
     check("只有 error 没有派发证据 → dispatched=null 且 outcomeUnknown=true", a[2] && a[2].dispatched === null && a[2].outcomeUnknown === true, JSON.stringify(a[2]));
     check("批次 → 报告 executedSubActions 与 failedSubActionIndex", a[3] && a[3].dispatched === true && a[3].executedSubActions.length === 2 && a[3].failedSubActionIndex === 1 && a[3].intent.batchSize === 2, JSON.stringify(a[3]));
     check("history 与 stepLog 分开报告", Array.isArray(r.actions) && Array.isArray(r.stepLog), JSON.stringify({ actions: r.actions.length, stepLog: r.stepLog.length }));
+    // 回归：result.error 不能永远是 null；result.outcomeUnknown 要聚合单步未知证据。
+    check("单步 error 回退到 result.error（真实 history 错误）", r.error === "boom", JSON.stringify({ error: r.error, reason: r.reason }));
+    check("单步未知证据聚合到 result.outcomeUnknown", r.outcomeUnknown === true, JSON.stringify({ outcomeUnknown: r.outcomeUnknown, perStep: a.map((x) => x.outcomeUnknown) }));
 
     // 批次中途被拦（前面的子动作已派发）：executedSubActions 有值就不能被 guardRejected 压成「未派发」
     const partialHost = makeHost();
@@ -498,6 +513,24 @@ if (typeof runCdpTask === "function") {
     const ap = (rp.actions || [])[0];
     check("批次部分执行后才被拦 → dispatched=true（不被 guardRejected 覆盖）", Boolean(ap) && ap.dispatched === true && ap.executedSubActions.length === 1, JSON.stringify(ap && { dispatched: ap.dispatched, subs: ap.executedSubActions, skipped: ap.skipped }));
     check("批次部分执行 → batchPartial=true 且 outcomeUnknown=true", Boolean(ap) && ap.batchPartial === true && ap.outcomeUnknown === true && ap.skipped.guardRejected === "dangerous_action", JSON.stringify(ap && { batchPartial: ap.batchPartial, outcomeUnknown: ap.outcomeUnknown }));
+
+    // 回归：executedSubActions: []（一个子动作都没派发）不能被当成 partial / 结果未知。
+    const emptyBatchHost = makeHost();
+    const emptyBatchEngine = makeEngine({
+      loop: async () => ({
+        success: false,
+        steps: 1,
+        reason: "guard_rejected",
+        history: [{ action: "batch", batchSize: 3, executedSubActions: [], failedSubActionIndex: 0, guardRejected: "dangerous_action", changed: false, stepDurationMs: 4, phases: {} }],
+      }),
+    });
+    const rEmpty = await runCdpTask(baseCfg(), { connectCdpHost: emptyBatchHost.connectCdpHost, engine: emptyBatchEngine, ...noSignals });
+    const aEmpty = (rEmpty.actions || [])[0];
+    check(
+      "空批次（0 个子动作）→ dispatched=false、batchPartial=false、outcomeUnknown=false",
+      Boolean(aEmpty) && aEmpty.dispatched === false && aEmpty.batchPartial === false && aEmpty.outcomeUnknown === false && rEmpty.outcomeUnknown === false,
+      JSON.stringify({ dispatched: aEmpty && aEmpty.dispatched, batchPartial: aEmpty && aEmpty.batchPartial, stepUnknown: aEmpty && aEmpty.outcomeUnknown, resultUnknown: rEmpty.outcomeUnknown })
+    );
   }
 
   // ── [12] 宿主控制异常 / 抽取阶段取消 ───────────────────────────────────────

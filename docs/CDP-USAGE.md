@@ -76,7 +76,7 @@ curl -s http://127.0.0.1:9333/json/version | grep webSocketDebuggerUrl
 | `cdpEndpoint` | **必需**。`http://127.0.0.1:<port>`（适配器自动读 `/json/version`）或 `ws://…/devtools/browser/<id>` |
 | `cdpTimeoutMs` | 连接超时，默认 `15000` |
 | `goal` / `extractInstruction` | 至少要有一个；只有抽取时不跑操作循环 |
-| `until` | 确定性退出条件（URL 子串）。**最终 URL 复核**，未命中绝不判成功 |
+| `until` | 确定性退出条件（URL 子串）。**最终 URL 复核**，未命中绝不判成功。**必须同时给 `goal`**（纯抽取没有操作循环可验证） |
 | `cache` / `cacheFile` / `cacheContext` | 动作缓存开关、文件与身份上下文（与 CLI 同义） |
 | `forceViewport` | 字符串 `<宽>x<高>[@缩放]`，原样透传引擎（`1280x900` / `1280x900@2`） |
 | `strictViewport` | `true` = 视口退化时直接失败，不自动撑起 |
@@ -84,7 +84,8 @@ curl -s http://127.0.0.1:9333/json/version | grep webSocketDebuggerUrl
 | `routeFile` | 只读：把这个 JSON 带进结果的 `route` 字段。本入口**不做**路由刷新 |
 | `keepSpace` / `keepPage` | 完成后保留页面供排查（连接仍会释放） |
 
-CDP 模式**不接受** `spaceId`（不复用 ego taskSpace）和 `keep`（不按页面 label 保留），传了直接 exit 2。
+CDP 模式**不接受** `spaceId`（不复用 ego taskSpace）、`keep`（不按页面 label 保留）和
+「只有 `extractInstruction` 却配 `until`」（没有操作循环可证明达成），这三类直接 exit 2。
 
 ## 宿主适配器契约
 
@@ -145,7 +146,10 @@ const { page, metadata, close } = await connectCdpHost({ endpoint, signal, timeo
 * `dispatched`：`true` 已派发（有 `executedSubActions` 或 `changed` 证据）/ `false` 确认未派发
   （守卫拒绝、陈旧目标、`invalidResponse`、`wait`/`done`/`blocked`）/ `null` 未知。
 * `outcomeUnknown`：可能已产生副作用但未核实（单步结果未知、`action_outcome_unknown`、取消时在飞的一步）。
-* 结果级 `outcomeUnknown` 在取消、引擎报 `action_outcome_unknown`、宿主中止时为 `true`。
+* 结果级 `outcomeUnknown` 在取消、引擎报 `action_outcome_unknown`、宿主中止、
+  或**任一步/批次带单步未知证据**（`actions[].outcomeUnknown` / `batchPartial`）时为 `true`。
+* 结果级 `error`：抽取错误优先；没有抽取时回退到真实单步错误（引擎 history 里最后一条 `error`），
+  不再是永远 `null`。
 
 其余字段：`extracted` / `extractSkipped` / `data` / `schema` / `phases` / `cacheHits` / `cacheHeals` /
 `serverModels` / `serverEndpoints` / `usage` / `viewport` / `viewportOverride` / `hint` / `metadata` /
@@ -172,7 +176,7 @@ CLI 行为测试在主控分支，本文件只描述 runner 侧契约。
 
 ## 验证状态
 
-已跑（`node bench/test-cdp-runner.mjs`，98 项断言，退出码 0）：配置校验先于适配器加载、退出码 2/3、
+已跑（`node bench/test-cdp-runner.mjs`，104 项断言，退出码 0）：配置校验先于适配器加载、退出码 2/3、
 字段透传、`verified` 与模型 done 分离、`until` 最终 URL 复核、`until` 未命中不 success、抽取门控与失败、
 取消阻止新派发并在 `finally` 释放连接、`EGO_HOST_ABORTED` 与用户取消区分、动作意图/已执行/未知（含批次
 部分执行）三段报告、导航只走 `goto`（缺 `goto` 按契约错误 `exit 2`；`HOST_NAVIGATION_FAILED` 仍算导航失败）、
