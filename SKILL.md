@@ -17,6 +17,7 @@ metadata:
 | --- | --- |
 | `scripts/decider-loop.mjs` | 引擎（决策闭环、元素表解析、退出判定） |
 | `scripts/ego-decision-layer` | 命令行入口（会自动在 同目录 / 仓库根 / `~/.agents/lib/` 里找引擎） |
+| `scripts/run-cdp-task.mjs` | 开发分支的普通 Node + 外部 Chrome CDP 入口 |
 | `scripts/wire-agent-skills.sh` | 把 Agent 技能目录里的官方 `ego-browser` 入口接管成**路由层**（见下节） |
 | `overlay/ego-browser/SKILL.md.in` | 路由层的模板（接管时生成，正文仍指向 App 当前版本） |
 | `examples/bench/` | 对照基准脚本（A 组 Jev 闭环 vs B 组经典循环） |
@@ -33,7 +34,13 @@ ego-decision-layer --url "…" "目标"                        # 已链接进 PA
 skills 拷贝按安装记录定向更新本技能并保留原作用域。已跟踪文件未提交改动或更新失败会非零退出，
 ZIP / 插件安装无匹配记录时需走原渠道。旧版本先按原渠道更新一次才能获得新子命令。
 
-基础用法、Space/Page/选择器/收尾纪律仍以 `ego-browser` 技能为准；本技能只负责「让 Jev 加速」这件事。
+默认 ego lite 路径的基础用法、Space/Page/选择器/收尾纪律仍以 `ego-browser` 技能为准。
+
+开发分支增加 `--cdp-endpoint <http(s)/ws(s) URL>`：普通 Node 22+ 连接外部 Chrome，创建专属页面，
+不要求 ego lite，也不刷新官方技能路由。`--space` / `--keep` 不适用；`--keep-space` 保留新页面。
+此入口已通过双宿主受控任务验收，不属于 `v0.10.0` 已发布能力。真实 Jev 的 HN 导航与表单任务可用
+`node scripts/../bench/test-host-integration-live.mjs --suite` 复验（需 Node 22+、Chrome 与凭证）；
+共同任务集用注入判定器，不能据此宣称模型成功率。
 
 ## 路由：什么时候用我
 
