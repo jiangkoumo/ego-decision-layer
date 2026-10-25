@@ -1,6 +1,6 @@
 # P1 并行开发与主控验收记录
 
-状态：三个子任务已本地提交；主控 CLI / 文档 / 集成检查保存在 `feat/p1-cdp-cli-integration` 分支。**未合并、未 rebase、未推送、未发布。**
+状态：用户已批准合并与推送。三个子任务和主控 CLI 已依次合入本地 `main`（集成合并提交 `7ee3307`），从第二个分支起均先 rebase 并重跑检查。版本仍为 0.10.0，未创建新标签或 Release。推送结果以远端分支与本报告提交的包含关系核对。
 
 ## 已完成
 
@@ -66,8 +66,17 @@ node bench/test-host-integration-live.mjs --suite
 - 无版本升级、标签或 Release 操作；不把开发能力写成 v0.10.0 已发布内容。没有新增 MCP、视觉模型或失败升级能力。
 - 工具纪律偏差：子代理在早期开发/审阅中曾用 shell grep/head/sed 读取代码，其中 #8 一次 sed -i 写测试；违反当前 Pi 硬门禁。主控已明确纠正，最后修复轮使用 Pi 文件工具，主控独立复跑关键验收。偏差不能因测试通过而消失，本轮流程不能宣称完全符合硬门禁。
 
-## 具体阻碍与建议合并顺序
+## 合并与复验
 
-当前没有阻碍上述开发验收的外部依赖；待用户批准合并。
+用户批准「合并推送」后，先合并远端 main 的共同历史，保留本地 AGENTS.md 协作规则，再按顺序集成：
 
-建议顺序：`feat/8-cdp-host` → `feat/9-cdp-runner` → `test/10-dual-host-acceptance` → 主控 CLI/文档/真实集成检查。按仓库约定，从第二个分支起 rebase 到最新 main 后重跑受影响检查，再逐个合并；最后将主控 `feat/p1-cdp-cli-integration` 接到集成后的 main 并复验。推送、发布和 worktree/分支清理仍另需授权。
+| 分支 | 合并提交 | rebase 后业务提交 |
+| --- | --- | --- |
+| `feat/8-cdp-host` | `a25a420` | 原 `c0bb884`、`dae5649` 保留 |
+| `feat/9-cdp-runner` | `aa674f5` | `bb3585b`、`b2f9c06` |
+| `test/10-dual-host-acceptance` | `57877aa` | `12e288b` |
+| `feat/p1-cdp-cli-integration` | `7ee3307` | `61134c0` |
+
+本轮实际复验：#8 适配器 167/167（exit 0）、#9 编排 104/104（exit 0，真实浏览器项仍单独 SKIP），#10 rebase 后 ego lite 12/12（exit 0）。完整集成分支不带跨 worktree 环境覆盖运行 `node bench/test-host-integration-live.mjs --suite`，exit 0：CDP 受控 12/12，HN、表单和共享 CLI 均 verified=true，模型 `jev-1.14.0`，临时 Chrome PID 49971 确认退出。CLI 15/15、Windows 路径 36/36、路由 62/62、版本一致性 20/20、无外部依赖检查 9/9 及 Bash 语法/diff 检查均 exit 0。
+
+版本检查本轮未再出现缺少 v0.10.0 tag 的警告；未为此次开发创建新发布。原有已知限制与工具纪律偏差保持上文记录。worktree 与分支保留，没有清理。
