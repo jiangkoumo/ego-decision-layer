@@ -51,7 +51,7 @@ targetCloseError? }`——`browserClosed` 恒为 `false`，因为宿主**从不*
 | `cdp(method, params, {timeoutMs}?)` | 页面会话（带 `sessionId`）上的裸 CDP | `Input.dispatchMouseEvent` / `Input.insertText` / `Input.dispatchKeyEvent` / `Emulation.setDeviceMetricsOverride` |
 | `url()` | 当前文档 URL；导航中 evaluate 失败时用 `Page.frameNavigated` 兜底 | `urlBefore` / `urlAfter`、进展判定 |
 | `title()` | 当前文档标题；同上兜底 | 决策上下文 |
-| `waitForLoadState(state, {timeout})` | 等 `domcontentloaded`（`interactive`）/ `load`（`complete`） | `settle` 的导航等待、观测遇导航的有界重试 |
+| `waitForLoadState(state, {timeout})` | 只接受 `load`（`complete`）/ `domcontentloaded`（`interactive`）；其他值（含 `commit`、`networkidle*`）**在发任何探针之前**抛 `HostCapabilityError`，不会静默按 `load` 等待 | `settle` 的导航等待、观测遇导航的有界重试 |
 | `keyboard.press(key)` | 真实 `Input.dispatchKeyEvent`（`Enter` 带 `text:"\r"`，否则隐式提交不触发） | `type_text_submit` |
 
 ### page 方法（入口路径，引擎不调用）
@@ -151,6 +151,8 @@ B 段（真实 Chrome，缺少浏览器时 SKIP 并单独列出）覆盖：`eval
 ## 未验证 / 边界
 
 - 只在 macOS + Google Chrome（156.x）实测；Linux / Windows 的 Chrome 路径与 CDP 行为未验证。
+- `goto` 的提交判定是「导航返回的目标 `loaderId` 在主 frame 上出现」。**导航被后续导航 supersede（连续两次导航，前一个 `loaderId` 永不出场）的情形未复现**：假服务器与真实 Chrome 测试都没有这个场景，因此这里没有多导航竞态仲裁（不排除后续导航、不比较导航序号）。遇到这类页面时表现为 `goto` 等提交直到 `timeout` 后 `HostTimeoutError`，而不是悄悄拿错文档。需要处理时应先在真实 Chrome 里复现，再扩导航策略。
+- 单条 CDP 命令的默认 `commandTimeoutMs`（30s）仍然是有界兜底：`waitForLoadState` / `goto` 的每条探针都受该次等待预算约束（不会被拖到 30s），但 `page.cdp` / `page.evaluate` 的单条命令最长仍可等满 30s；需要更紧的上限时由调用点传 `{timeoutMs}`。
 - `networkidle*` 类等待未实现；需要时由调用方用页面内状态自行判定。
 - 跨宿主（ego lite ↔ cdp-host）的同任务对照由发布流程单独做，不在本适配器的测试范围内。
 - 视觉兜底（`visualGrounder`）走的是 `page.evaluate` + 裸 CDP，路径与 ego 相同，

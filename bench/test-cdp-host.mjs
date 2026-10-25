@@ -58,7 +58,7 @@ async function expectsError(fn, label = "") {
   }
 }
 
-const { connectCdpHost, MIN_NODE_MAJOR, WAIT_UNTIL_STATES } = await import(HOST);
+const { connectCdpHost, MIN_NODE_MAJOR, WAIT_UNTIL_STATES, LOAD_STATE_NAMES } = await import(HOST);
 const {
   HOST_CONTRACT_VERSION,
   HOST_CAPABILITY_KEY,
@@ -346,7 +346,28 @@ section("[0] 契约模块自检");
   };
   const caps = describeHostCapabilities(full);
   check("引擎路径 + goto 齐全 → domPath/entryPath 都为 true", caps.domPath === true && caps.entryPath === true, JSON.stringify(caps));
-  check("没有声明时退回结构推断（snapshot 方法齐全 → snapshotPath true）", caps.declared === false && caps.snapshotPath === false, JSON.stringify(caps));
+  check("没有声明时退回结构推断（无 snapshot 方法 → snapshotPath false）", caps.declared === false && caps.snapshotPath === false, JSON.stringify(caps));
+// 结构推断的正例：page 没有 hostCapabilities 声明，但方法都是真的（ego 那种 page）
+const legacyFull = {
+  evaluate() {},
+  cdp() {},
+  url() {},
+  title() {},
+  waitForLoadState() {},
+  goto() {},
+  keyboard: { press() {} },
+  snapshot() {},
+  click() {},
+  fill() {},
+  press() {},
+  selectOption() {},
+};
+const legacyCaps = describeHostCapabilities(legacyFull);
+check(
+  "没有声明 + 方法齐全 → 结构推断 snapshotPath true 且 unsupported 为空",
+  legacyCaps.declared === false && legacyCaps.snapshotPath === true && legacyCaps.unsupported.length === 0 && legacyCaps.domPath === true,
+  JSON.stringify(legacyCaps)
+);
   check("assertHostPage(entry:true) 对完整 page 不抛错", (() => {
     try {
       assertHostPage(full, { entry: true });
@@ -415,6 +436,7 @@ section("[0] 契约模块自检");
   check("HostStalledError 不会被误认成等待超时（不能当成页面还在加载）", isTimeoutError(new HostStalledError("命令无响应")) === false);
   check("HostAbortError 不会被误认成等待超时", isTimeoutError(abortErr) === false);
   check("goto 的 waitUntil 白名单不含 networkidle（不假装实现）", !WAIT_UNTIL_STATES.includes("networkidle0") && WAIT_UNTIL_STATES.includes("commit"), JSON.stringify([...WAIT_UNTIL_STATES]));
+check("waitForLoadState 白名单只有 load / domcontentloaded（commit 归 goto）", LOAD_STATE_NAMES.join(",") === "load,domcontentloaded", JSON.stringify([...LOAD_STATE_NAMES]));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -571,13 +593,33 @@ section("[4] 协议层：事件路由（导航期间 url() 用事件兜底）");
   await fake.stop();
 }
 
-section("[5] 协议层：waitForLoadState（含探针预算）");
+section("[5] 协议层：waitForLoadState（白名单 + 探针预算）");
 {
   const fake = createFakeCdpServer();
   const { httpEndpoint } = await fake.start();
   let readyState = "complete";
   installDocumentState(fake, { readyState: () => readyState });
   const host = await connectCdpHost({ endpoint: httpEndpoint, timeoutMs: 3000 });
+
+  // 未知状态名：显式拒绝，且一条探针都不发（不能静默按 load 处理）
+  for (const badState of ["commit", "networkidle0", "domcontentloaded ", null]) {
+    const beforeProbes = fake.count("Runtime.evaluate");
+    const badErr = await expectsError(() => host.page.waitForLoadState(badState, { timeout: 1000 }));
+    check(
+      `waitForLoadState(${JSON.stringify(badState)}) → HostCapabilityError`,
+      badErr instanceof HostCapabilityError,
+      String(badErr?.message)
+    );
+    check(
+      `waitForLoadState(${JSON.stringify(badState)}) 不发任何探针（不静默按 load 等待）`,
+      fake.count("Runtime.evaluate") === beforeProbes,
+      `${fake.count("Runtime.evaluate") - beforeProbes} 条`
+    );
+  }
+  check(
+    "拒绝时列出支持的状态名",
+    /load \/ domcontentloaded/.test((await expectsError(() => host.page.waitForLoadState("commit")))?.message || "")
+  );
 
   const startedAt = Date.now();
   await host.page.waitForLoadState("load", { timeout: 2000 });

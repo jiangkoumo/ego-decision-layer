@@ -52,6 +52,8 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULT_LOAD_STATE_TIMEOUT_MS = 30_000;
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 const WAIT_UNTIL_STATES = Object.freeze(["load", "domcontentloaded", "commit"]);
+/** waitForLoadState 的白名单：只有这两种有确定语义。commit 属于 goto，未知值不许默认成 load。 */
+const LOAD_STATE_NAMES = Object.freeze(["load", "domcontentloaded"]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
@@ -433,6 +435,17 @@ function createCdpPage({ connection, sessionId, initialUrl = "about:blank", canc
 
   async function waitForLoadState(stateName = "load", options = {}) {
     assertUsable();
+    // 白名单在发任何探针**之前**：未知状态名不能静默按 "load" 处理。
+    // 否则误传的 "networkidle0" / "commit" 会变成一次真等待，结果看起来「等待成功」，
+    // 调用方拿到的语义与它以为的完全不同。
+    if (!LOAD_STATE_NAMES.includes(stateName)) {
+      throw new HostCapabilityError(
+        `page.waitForLoadState 只支持 ${LOAD_STATE_NAMES.join(" / ")}（收到 ${JSON.stringify(stateName)}）：` +
+          "cdp-host 不把未知状态名当成 load，也不会为此发任何探针。" +
+          (stateName === "commit" ? ' 只想等提交请用 page.goto(url, { waitUntil: "commit" })。' : ""),
+        { details: { state: stateName, supported: [...LOAD_STATE_NAMES] } }
+      );
+    }
     const wanted = stateName === "domcontentloaded" ? "interactive" : "complete";
     const timeout = options.timeout ?? DEFAULT_LOAD_STATE_TIMEOUT_MS;
     const startedAt = Date.now();
@@ -977,6 +990,7 @@ export {
   DEFAULT_LOAD_STATE_TIMEOUT_MS,
   DEFAULT_NAVIGATION_TIMEOUT_MS,
   WAIT_UNTIL_STATES,
+  LOAD_STATE_NAMES,
   DOM_PATH_REQUIRED,
   ENTRY_PATH_REQUIRED,
 };
