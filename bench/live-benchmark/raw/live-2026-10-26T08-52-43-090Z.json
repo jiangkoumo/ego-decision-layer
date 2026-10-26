@@ -1,0 +1,2369 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "p2-live-v1",
+  "generatedAt": "2026-10-26T08:52:43.052Z",
+  "status": "failed",
+  "complete": true,
+  "repoHead": "65b759ff3bba19de11c64a8b5f179dce01777a6a",
+  "runner": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "files": [
+      {
+        "path": "bench/live-benchmark/run.mjs",
+        "sha256": "a046ab45d95ca56231b892a488bc3a0007f47faf975113ea5d5814287a41bfbb"
+      },
+      {
+        "path": "bench/live-benchmark/suite.mjs",
+        "sha256": "5af2b9fceadad96ca02c1060f09dd96ebf4fc5f29dab4b9908b57f4fbaef6544"
+      },
+      {
+        "path": "bench/live-benchmark/tasks.mjs",
+        "sha256": "cf40ce41b69cb66f13d5857c1c046293a7dde7287af0ce8df284e0062bbead48"
+      },
+      {
+        "path": "bench/live-benchmark/verifiers.mjs",
+        "sha256": "41acbe566be09d3add181d6f0cfd92edff886b24d27fae8902cc4c6ba0b8b9a2"
+      },
+      {
+        "path": "scripts/decider-loop.mjs",
+        "sha256": "567500a0ee4784294bb7e32d59030da47acf689fb064df53f10e2db9940ec016"
+      }
+    ]
+  },
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "egoBrowserVersion": "ego-browser 0.6.0.20",
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromeAvailable": true,
+    "externalEndpoint": false,
+    "credentialPresent": true,
+    "credentialSource": "file chain; value never read into the report"
+  },
+  "order": [
+    "cdp/hn-navigation/r1",
+    "cdp/hn-navigation/r2",
+    "cdp/hn-navigation/r3",
+    "cdp/wiki-search/r1",
+    "cdp/wiki-search/r2",
+    "cdp/wiki-search/r3",
+    "ego/hn-navigation/r1",
+    "ego/hn-navigation/r2",
+    "ego/hn-navigation/r3",
+    "ego/wiki-search/r1",
+    "ego/wiki-search/r2",
+    "ego/wiki-search/r3"
+  ],
+  "hosts": [
+    {
+      "host": "cdp",
+      "status": "completed",
+      "reason": null,
+      "hostVersion": "Chrome/156.0.8078.48",
+      "cleanup": {
+        "ok": true,
+        "ownedBrowser": true,
+        "targetClosed": true,
+        "processStopped": true,
+        "profileRemoved": true,
+        "externalBrowserPreserved": false,
+        "errors": []
+      },
+      "trialIds": [
+        "cdp/hn-navigation/r1",
+        "cdp/hn-navigation/r2",
+        "cdp/hn-navigation/r3",
+        "cdp/wiki-search/r1",
+        "cdp/wiki-search/r2",
+        "cdp/wiki-search/r3"
+      ],
+      "notRunIds": [],
+      "notRun": []
+    },
+    {
+      "host": "ego",
+      "status": "completed",
+      "reason": null,
+      "hostVersion": "ego-browser 0.6.0.20",
+      "cleanup": {
+        "ok": true,
+        "ownedTaskSpace": true,
+        "taskSpaceFinished": true,
+        "pagesBeforeFinish": [
+          "p1"
+        ],
+        "childExitCode": 0,
+        "childTimedOut": false,
+        "stageRemoved": true,
+        "errors": []
+      },
+      "trialIds": [
+        "ego/hn-navigation/r1",
+        "ego/hn-navigation/r2",
+        "ego/hn-navigation/r3",
+        "ego/wiki-search/r1",
+        "ego/wiki-search/r2",
+        "ego/wiki-search/r3"
+      ],
+      "notRunIds": [],
+      "notRun": []
+    }
+  ],
+  "trials": [
+    {
+      "trialId": "cdp/hn-navigation/r1",
+      "host": "cdp",
+      "taskId": "hn-navigation",
+      "round": 1,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:10.855Z",
+      "finishedAt": "2026-10-26T08:52:14.991Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\ndannyw 0 minutes ago | parent | context | on: OpenAI and Anthropic cut their LLM prices by up to...\n\n\nNVIDIA won't be too happy about that; alongside Micron, etc.\n\n",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 4136,
+        "navigationMs": 1959,
+        "engineLatencyMs": 2173,
+        "verifyMs": 3,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 23,
+          "decideMs": 1441,
+          "executeMs": 695,
+          "verifyMs": 10
+        },
+        "inputTokens": 11191,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11191,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1450,
+          "phases": {
+            "observeMs": 15,
+            "decideMs": 1080,
+            "executeMs": 348,
+            "verifyMs": 7
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 719,
+          "phases": {
+            "observeMs": 8,
+            "decideMs": 361,
+            "executeMs": 347,
+            "verifyMs": 3
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1450ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 719ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "cdp/hn-navigation/r2",
+      "host": "cdp",
+      "taskId": "hn-navigation",
+      "round": 2,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:14.992Z",
+      "finishedAt": "2026-10-26T08:52:17.325Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nelendilm 0 minutes ago | parent | context | on: Attention Is Not What You Need (2025)\n\n\nWhat has that got to do with anything. Look into his work rather than his on",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 2333,
+        "navigationMs": 269,
+        "engineLatencyMs": 2061,
+        "verifyMs": 3,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 14,
+          "decideMs": 602,
+          "executeMs": 1438,
+          "verifyMs": 5
+        },
+        "inputTokens": 11191,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11191,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 617,
+          "phases": {
+            "observeMs": 5,
+            "decideMs": 276,
+            "executeMs": 334,
+            "verifyMs": 2
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1442,
+          "phases": {
+            "observeMs": 9,
+            "decideMs": 326,
+            "executeMs": 1104,
+            "verifyMs": 3
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 617ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 1442ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "cdp/hn-navigation/r3",
+      "host": "cdp",
+      "taskId": "hn-navigation",
+      "round": 3,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:17.325Z",
+      "finishedAt": "2026-10-26T08:52:18.913Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nelendilm 0 minutes ago | parent | context | on: Attention Is Not What You Need (2025)\n\n\nWhat has that got to do with anything. Look into his work rather than his on",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 1588,
+        "navigationMs": 264,
+        "engineLatencyMs": 1321,
+        "verifyMs": 3,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 12,
+          "decideMs": 612,
+          "executeMs": 690,
+          "verifyMs": 5
+        },
+        "inputTokens": 11191,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11191,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 624,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 274,
+            "executeMs": 340,
+            "verifyMs": 3
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 695,
+          "phases": {
+            "observeMs": 5,
+            "decideMs": 338,
+            "executeMs": 350,
+            "verifyMs": 2
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 624ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 695ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "cdp/wiki-search/r1",
+      "host": "cdp",
+      "taskId": "wiki-search",
+      "round": 1,
+      "status": "FAILED",
+      "startedAt": "2026-10-26T08:52:18.913Z",
+      "finishedAt": "2026-10-26T08:52:22.495Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": false,
+        "reason": "max_steps_reached",
+        "steps": 5,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": false,
+        "detail": "Wiki final URL was not the exact /wiki/Jev article: https://en.wikipedia.org/wiki/Main_Page",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Main_Page",
+          "title": "Wikipedia, the free encyclopedia",
+          "pathname": "/wiki/Main_Page",
+          "search": "",
+          "heading": "Main Page",
+          "content": true,
+          "paragraphCount": 9,
+          "longParagraphs": 6,
+          "textSample": "Eyebrow Talk was a Chinese monthly literary magazine published in 18 issues from 1914 to 1916. Among the first Chinese literary magazines marketed towards women, and the first to be edited mainly by women, it was founded by Gao Jianhua and ",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": false,
+      "taskPassed": false,
+      "unsettled": false,
+      "execution": {
+        "ok": false,
+        "reasons": [
+          "engine_not_successful"
+        ]
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 3582,
+        "navigationMs": 1773,
+        "engineLatencyMs": 1807,
+        "verifyMs": 2,
+        "logicalAskCalls": 5,
+        "httpRequests": 5,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 5,
+        "dispatches": 0,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 171,
+          "decideMs": 1461,
+          "executeMs": 168,
+          "verifyMs": 1
+        },
+        "inputTokens": 12609,
+        "outputTokens": 1310,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 12609,
+          "output_tokens": 1310
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "max_steps_reached",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 277,
+          "phases": {
+            "observeMs": 11,
+            "decideMs": 266,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 2,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 342,
+          "phases": {
+            "observeMs": 74,
+            "decideMs": 265,
+            "executeMs": 2,
+            "verifyMs": 1
+          }
+        },
+        {
+          "step": 3,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 280,
+          "phases": {
+            "observeMs": 5,
+            "decideMs": 275,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 4,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 576,
+          "phases": {
+            "observeMs": 69,
+            "decideMs": 341,
+            "executeMs": 166,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 5,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 326,
+          "phases": {
+            "observeMs": 12,
+            "decideMs": 314,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 277ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 1] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 2] 342ms | scroll_up | 观测:dom",
+        "  └─ [Step 3] 280ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 3] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 4] 576ms | scroll_up | 观测:dom",
+        "  └─ [Step 5] 326ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 5] 目标在视口外：下滚一屏后重新观测（第 1/4 次）"
+      ]
+    },
+    {
+      "trialId": "cdp/wiki-search/r2",
+      "host": "cdp",
+      "taskId": "wiki-search",
+      "round": 2,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:22.495Z",
+      "finishedAt": "2026-10-26T08:52:27.423Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 5,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact /wiki/Jev path plus Jev heading and article content paragraphs",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Jev",
+          "title": "Jev - Wikipedia",
+          "pathname": "/wiki/Jev",
+          "search": "",
+          "heading": "Jev",
+          "content": true,
+          "paragraphCount": 1,
+          "longParagraphs": 0,
+          "textSample": "Jev or JEV can refer to:",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 4928,
+        "navigationMs": 527,
+        "engineLatencyMs": 3574,
+        "verifyMs": 827,
+        "logicalAskCalls": 5,
+        "httpRequests": 5,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 5,
+        "dispatches": 5,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 103,
+          "decideMs": 1332,
+          "executeMs": 2120,
+          "verifyMs": 6
+        },
+        "inputTokens": 13465,
+        "outputTokens": 1498,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 13465,
+          "output_tokens": 1498
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 264,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 257,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 2,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 344,
+          "phases": {
+            "observeMs": 74,
+            "decideMs": 268,
+            "executeMs": 2,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 3,
+          "action": "click",
+          "target": "ref=2",
+          "targetLabel": "link \"Search\" 当前值=空 /wiki/Special:Search",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 446,
+          "phases": {
+            "observeMs": 5,
+            "decideMs": 257,
+            "executeMs": 181,
+            "verifyMs": 3
+          }
+        },
+        {
+          "step": 4,
+          "action": "type_text_submit",
+          "target": "ref=35",
+          "targetLabel": "searchbox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": false,
+          "guardRejected": "disconnected",
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 293,
+          "phases": {
+            "observeMs": 10,
+            "decideMs": 282,
+            "executeMs": 0,
+            "verifyMs": 1
+          }
+        },
+        {
+          "step": 5,
+          "action": "type_text_submit",
+          "target": "ref=37",
+          "targetLabel": "combobox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 2214,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 268,
+            "executeMs": 1937,
+            "verifyMs": 2
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 264ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 1] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 2] 344ms | scroll_up | 观测:dom",
+        "  └─ [Step 3] 446ms | click → ref=2 | 观测:dom",
+        "  └─ [Step 4] 293ms | type_text_submit → ref=35 \"Jev\" | 观测:dom | ⚠️ 执行前守卫拒绝: disconnected",
+        "  └─ [Step 5] 2214ms | type_text_submit → ref=37 \"Jev\" | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 5 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "cdp/wiki-search/r3",
+      "host": "cdp",
+      "taskId": "wiki-search",
+      "round": 3,
+      "status": "FAILED",
+      "startedAt": "2026-10-26T08:52:27.423Z",
+      "finishedAt": "2026-10-26T08:52:29.943Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": false,
+        "reason": "max_steps_reached",
+        "steps": 5,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": false,
+        "detail": "Wiki final URL was not the exact /wiki/Jev article: https://en.wikipedia.org/wiki/Main_Page",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Main_Page",
+          "title": "Wikipedia, the free encyclopedia",
+          "pathname": "/wiki/Main_Page",
+          "search": "",
+          "heading": "Main Page",
+          "content": true,
+          "paragraphCount": 9,
+          "longParagraphs": 6,
+          "textSample": "Eyebrow Talk was a Chinese monthly literary magazine published in 18 issues from 1914 to 1916. Among the first Chinese literary magazines marketed towards women, and the first to be edited mainly by women, it was founded by Gao Jianhua and ",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": false,
+      "taskPassed": false,
+      "unsettled": false,
+      "execution": {
+        "ok": false,
+        "reasons": [
+          "engine_not_successful"
+        ]
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 2520,
+        "navigationMs": 916,
+        "engineLatencyMs": 1602,
+        "verifyMs": 2,
+        "logicalAskCalls": 5,
+        "httpRequests": 5,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 5,
+        "dispatches": 0,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 165,
+          "decideMs": 1428,
+          "executeMs": 3,
+          "verifyMs": 0
+        },
+        "inputTokens": 12609,
+        "outputTokens": 1310,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 12609,
+          "output_tokens": 1310
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "max_steps_reached",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 267,
+          "phases": {
+            "observeMs": 9,
+            "decideMs": 258,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 2,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 336,
+          "phases": {
+            "observeMs": 73,
+            "decideMs": 262,
+            "executeMs": 1,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 3,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 366,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 359,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 4,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 333,
+          "phases": {
+            "observeMs": 67,
+            "decideMs": 264,
+            "executeMs": 2,
+            "verifyMs": 0
+          }
+        },
+        {
+          "step": 5,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 294,
+          "phases": {
+            "observeMs": 9,
+            "decideMs": 285,
+            "executeMs": 0,
+            "verifyMs": 0
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 267ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 1] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 2] 336ms | scroll_up | 观测:dom",
+        "  └─ [Step 3] 366ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 3] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 4] 333ms | scroll_up | 观测:dom",
+        "  └─ [Step 5] 294ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 5] 目标在视口外：下滚一屏后重新观测（第 1/4 次）"
+      ]
+    },
+    {
+      "trialId": "ego/hn-navigation/r1",
+      "host": "ego",
+      "taskId": "hn-navigation",
+      "round": 1,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:30.286Z",
+      "finishedAt": "2026-10-26T08:52:32.853Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nelendilm 0 minutes ago | parent | context | on: Attention Is Not What You Need (2025)\n\n\nWhat has that got to do with anything. Look into his work rather than his on",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 2567,
+        "navigationMs": 591,
+        "engineLatencyMs": 1970,
+        "verifyMs": 6,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 20,
+          "decideMs": 1119,
+          "executeMs": 812,
+          "verifyMs": 5
+        },
+        "inputTokens": 11666,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11666,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1275,
+          "phases": {
+            "observeMs": 14,
+            "decideMs": 839,
+            "executeMs": 418,
+            "verifyMs": 4
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 681,
+          "phases": {
+            "observeMs": 6,
+            "decideMs": 280,
+            "executeMs": 394,
+            "verifyMs": 1
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1275ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 681ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "ego/hn-navigation/r2",
+      "host": "ego",
+      "taskId": "hn-navigation",
+      "round": 2,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:32.853Z",
+      "finishedAt": "2026-10-26T08:52:34.715Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nelendilm 0 minutes ago | parent | context | on: Attention Is Not What You Need (2025)\n\n\nWhat has that got to do with anything. Look into his work rather than his on",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 1862,
+        "navigationMs": 449,
+        "engineLatencyMs": 1410,
+        "verifyMs": 3,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 21,
+          "decideMs": 515,
+          "executeMs": 822,
+          "verifyMs": 15
+        },
+        "inputTokens": 11666,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11666,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 703,
+          "phases": {
+            "observeMs": 15,
+            "decideMs": 248,
+            "executeMs": 426,
+            "verifyMs": 14
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 670,
+          "phases": {
+            "observeMs": 6,
+            "decideMs": 267,
+            "executeMs": 396,
+            "verifyMs": 1
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 703ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 670ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "ego/hn-navigation/r3",
+      "host": "ego",
+      "taskId": "hn-navigation",
+      "round": 3,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:34.715Z",
+      "finishedAt": "2026-10-26T08:52:36.563Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact HN /newcomments path plus #hnmain and comment rows/items",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nelendilm 0 minutes ago | parent | context | on: Attention Is Not What You Need (2025)\n\n\nWhat has that got to do with anything. Look into his work rather than his on",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 1848,
+        "navigationMs": 465,
+        "engineLatencyMs": 1352,
+        "verifyMs": 31,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 48,
+          "decideMs": 506,
+          "executeMs": 746,
+          "verifyMs": 21
+        },
+        "inputTokens": 11666,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11666,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 642,
+          "phases": {
+            "observeMs": 24,
+            "decideMs": 253,
+            "executeMs": 363,
+            "verifyMs": 2
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 679,
+          "phases": {
+            "observeMs": 24,
+            "decideMs": 253,
+            "executeMs": 383,
+            "verifyMs": 19
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 642ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 679ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "ego/wiki-search/r1",
+      "host": "ego",
+      "taskId": "wiki-search",
+      "round": 1,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:36.563Z",
+      "finishedAt": "2026-10-26T08:52:39.362Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 1,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact /wiki/Jev path plus Jev heading and article content paragraphs",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Jev",
+          "title": "Jev - Wikipedia",
+          "pathname": "/wiki/Jev",
+          "search": "",
+          "heading": "Jev",
+          "content": true,
+          "paragraphCount": 1,
+          "longParagraphs": 0,
+          "textSample": "Jev or JEV can refer to:",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 2799,
+        "navigationMs": 1542,
+        "engineLatencyMs": 1254,
+        "verifyMs": 3,
+        "logicalAskCalls": 1,
+        "httpRequests": 1,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 1,
+        "dispatches": 4,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 7,
+          "decideMs": 253,
+          "executeMs": 992,
+          "verifyMs": 1
+        },
+        "inputTokens": 3646,
+        "outputTokens": 449,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 3646,
+          "output_tokens": 449
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "type_text_submit",
+          "target": "ref=2",
+          "targetLabel": "searchbox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1253,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 253,
+            "executeMs": 992,
+            "verifyMs": 1
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1253ms | type_text_submit → ref=2 \"Jev\" | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 1 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "ego/wiki-search/r2",
+      "host": "ego",
+      "taskId": "wiki-search",
+      "round": 2,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:39.362Z",
+      "finishedAt": "2026-10-26T08:52:41.454Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 1,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact /wiki/Jev path plus Jev heading and article content paragraphs",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Jev",
+          "title": "Jev - Wikipedia",
+          "pathname": "/wiki/Jev",
+          "search": "",
+          "heading": "Jev",
+          "content": true,
+          "paragraphCount": 1,
+          "longParagraphs": 0,
+          "textSample": "Jev or JEV can refer to:",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 2092,
+        "navigationMs": 1027,
+        "engineLatencyMs": 1047,
+        "verifyMs": 18,
+        "logicalAskCalls": 1,
+        "httpRequests": 1,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 1,
+        "dispatches": 4,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 9,
+          "decideMs": 305,
+          "executeMs": 728,
+          "verifyMs": 3
+        },
+        "inputTokens": 3660,
+        "outputTokens": 449,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 3660,
+          "output_tokens": 449
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "type_text_submit",
+          "target": "ref=2",
+          "targetLabel": "searchbox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1045,
+          "phases": {
+            "observeMs": 9,
+            "decideMs": 305,
+            "executeMs": 728,
+            "verifyMs": 3
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1045ms | type_text_submit → ref=2 \"Jev\" | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 1 步动作后确认目标已达成"
+      ]
+    },
+    {
+      "trialId": "ego/wiki-search/r3",
+      "host": "ego",
+      "taskId": "wiki-search",
+      "round": 3,
+      "status": "VERIFIED",
+      "startedAt": "2026-10-26T08:52:41.454Z",
+      "finishedAt": "2026-10-26T08:52:43.029Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 1,
+        "thrown": null,
+        "timedOut": false,
+        "unsettled": false,
+        "settled": true,
+        "requestBudgetExceeded": false,
+        "stepBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": true,
+        "detail": "exact /wiki/Jev path plus Jev heading and article content paragraphs",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Jev",
+          "title": "Jev - Wikipedia",
+          "pathname": "/wiki/Jev",
+          "search": "",
+          "heading": "Jev",
+          "content": true,
+          "paragraphCount": 1,
+          "longParagraphs": 0,
+          "textSample": "Jev or JEV can refer to:",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "verifierOk": true,
+      "taskPassed": true,
+      "unsettled": false,
+      "execution": {
+        "ok": true,
+        "reasons": []
+      },
+      "falseSuccess": false,
+      "metrics": {
+        "latencyMs": 1575,
+        "navigationMs": 525,
+        "engineLatencyMs": 1048,
+        "verifyMs": 2,
+        "logicalAskCalls": 1,
+        "httpRequests": 1,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 1,
+        "dispatches": 4,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "stepBudgetExceeded": false,
+        "settlement": "settled",
+        "phases": {
+          "observeMs": 6,
+          "decideMs": 233,
+          "executeMs": 806,
+          "verifyMs": 2
+        },
+        "inputTokens": 3646,
+        "outputTokens": 449,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 3646,
+          "output_tokens": 449
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "type_text_submit",
+          "target": "ref=2",
+          "targetLabel": "searchbox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1047,
+          "phases": {
+            "observeMs": 6,
+            "decideMs": 233,
+            "executeMs": 806,
+            "verifyMs": 2
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1047ms | type_text_submit → ref=2 \"Jev\" | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 1 步动作后确认目标已达成"
+      ]
+    }
+  ],
+  "summary": {
+    "expectedTrials": 12,
+    "total": 12,
+    "notRun": 0,
+    "notRunIds": [],
+    "complete": true,
+    "verified": 10,
+    "verifierOk": 10,
+    "failedTrials": 2,
+    "verifiedRate": 0.8333333333333334,
+    "verifierOkRate": 0.8333333333333334,
+    "engineSuccessRate": 0.8333333333333334,
+    "falseSuccess": 0,
+    "falseSuccessRate": 0,
+    "falseSuccessTrials": [],
+    "failedTrialIds": [
+      "cdp/wiki-search/r1",
+      "cdp/wiki-search/r3"
+    ],
+    "byHostTask": [
+      {
+        "host": "cdp",
+        "taskId": "hn-navigation",
+        "rounds": 3,
+        "verified": 3,
+        "verifierOk": 3,
+        "engineSuccess": 3,
+        "falseSuccess": 0,
+        "medianEngineLatencyMs": 2061,
+        "medianTotalMs": 2333,
+        "logicalAskCalls": 6,
+        "httpRequests": 6,
+        "inputTokens": 33573,
+        "outputTokens": 4056
+      },
+      {
+        "host": "cdp",
+        "taskId": "wiki-search",
+        "rounds": 3,
+        "verified": 1,
+        "verifierOk": 1,
+        "engineSuccess": 1,
+        "falseSuccess": 0,
+        "medianEngineLatencyMs": 1807,
+        "medianTotalMs": 3582,
+        "logicalAskCalls": 15,
+        "httpRequests": 15,
+        "inputTokens": 38683,
+        "outputTokens": 4118
+      },
+      {
+        "host": "ego",
+        "taskId": "hn-navigation",
+        "rounds": 3,
+        "verified": 3,
+        "verifierOk": 3,
+        "engineSuccess": 3,
+        "falseSuccess": 0,
+        "medianEngineLatencyMs": 1410,
+        "medianTotalMs": 1862,
+        "logicalAskCalls": 6,
+        "httpRequests": 6,
+        "inputTokens": 34998,
+        "outputTokens": 4056
+      },
+      {
+        "host": "ego",
+        "taskId": "wiki-search",
+        "rounds": 3,
+        "verified": 3,
+        "verifierOk": 3,
+        "engineSuccess": 3,
+        "falseSuccess": 0,
+        "medianEngineLatencyMs": 1048,
+        "medianTotalMs": 2092,
+        "logicalAskCalls": 3,
+        "httpRequests": 3,
+        "inputTokens": 10952,
+        "outputTokens": 1347
+      }
+    ],
+    "failureConsumption": {
+      "trials": 2,
+      "engineLatencyMs": 3409,
+      "totalLatencyMs": 6102,
+      "logicalAskCalls": 10,
+      "httpRequests": 10,
+      "inputTokens": 25218,
+      "outputTokens": 2620,
+      "costUsd": null,
+      "costUsdReason": "no pricing asserted; usage is recorded but not converted to dollars"
+    },
+    "cleanupFailures": [],
+    "harnessFailures": [],
+    "skippedHosts": [],
+    "order": [
+      "cdp/hn-navigation/r1",
+      "cdp/hn-navigation/r2",
+      "cdp/hn-navigation/r3",
+      "cdp/wiki-search/r1",
+      "cdp/wiki-search/r2",
+      "cdp/wiki-search/r3",
+      "ego/hn-navigation/r1",
+      "ego/hn-navigation/r2",
+      "ego/hn-navigation/r3",
+      "ego/wiki-search/r1",
+      "ego/wiki-search/r2",
+      "ego/wiki-search/r3"
+    ],
+    "unknownMetrics": {
+      "costUsd": "null: no pricing asserted",
+      "humanTakeover": "null: not instrumented in this batch",
+      "httpRequests": null
+    }
+  },
+  "limitations": [
+    "Small first batch: 2 tasks x 2 hosts x 3 rounds = 12 requested trials; this is not a population success rate.",
+    "Wikipedia has historically been variable under a 5-step budget. Wiki failures are retained in the raw file and are not retried or re-budgeted.",
+    "The logical ask budget counts wrapper calls, not HTTP attempts; backend fallback can produce more than one HTTP request per ask, reported separately as httpRequests.",
+    "Engine wall-clock timeout is enforced by a harness gate: after the timeout every later page/CDP call is rejected before dispatch, and host cleanup still runs.",
+    "Initial navigation is outside the engine wall-clock budget but included in total latency.",
+    "costUsd and humanTakeover are null: no pricing is asserted and takeover is not instrumented in this batch.",
+    "Only the local macOS environment (ego lite / headless Chrome) was measured; Windows and Linux hosts were not verified.",
+    "Condition fields in the task manifest stay unknown; the verifier records observed password/captcha/region markers, and absence of a marker is not proof of absence."
+  ]
+}
