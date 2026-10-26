@@ -7,6 +7,25 @@
 每个版本按 **新增 / 修复 / 更正 / 未验证** 分组。「更正」记的是被实测推翻的旧结论，
 不是新功能；「未验证」如实列出还没测过的边界。
 
+## 0.11.0 — 2026-10-26
+
+### 新增
+
+- `--cdp-endpoint <http(s)/ws(s) URL>`（P1，PR #11）：普通 Node 22+ 连接外部 Chrome，创建专属页面，不要求 ego lite，也不刷新官方技能路由；`--keep-space` 保留新页面。独立运行入口 `scripts/run-cdp-task.mjs`；两个宿主共用 12 项受控验收任务，任务自建目标、保留无关页面、取消即停并复核最终 URL。
+- 双宿主共同基准第一批（P2，`bench/common-benchmark/`）：复用 P1 的 10 项任务，统一任务格式与预算、统一 runner 和报告口径（成功率、错误成功率、延迟、请求数、花费、护栏拒绝率、人工接管率、失败消耗）；宿主缺失记 SKIP 并写明原因。离线自测 `bench/test-common-benchmark.mjs`。
+- MCP 入口最小版（P3，`mcp/`、`docs/MCP.md`）：stdio MCP server 提供 `browser_task`，只包装 P1 独立运行入口，观测、决策、执行、护栏全部仍在 P1；配置只由服务端启动者提供，依赖（固定版本 `@modelcontextprotocol/sdk`）只装在 `mcp/` 下，不属于核心运行时。
+
+### 验证
+
+- P1 集成树：CDP 宿主 167/167、runner 104/104、CLI 15/15、ego lite 12/12、外部 Chrome 12/12，无错误成功；`test-host-integration-live.mjs --suite` 用真实 `jev-1.14.0` 通过 HN 导航与表单提交。
+- P2/P3 合并后（macOS）：`test-common-benchmark` 通过；`test-cdp-runner` 104 通过 / 1 跳过；`mcp/test-stdio` 41/41（先 `npm --prefix mcp ci`）。
+
+### 未验证
+
+- 真实 CDP 与 MCP 只在 macOS 上测过，未在 Windows / Linux 验证；MCP 为实验性入口。
+- 共同基准使用注入判定器，不能据此宣称模型成功率；P1 的 `no-text-source`、`batch-two-fields` 两项留到第二批。
+- Wikipedia 搜索在五步预算内时成时败，仍为可选项。
+
 ## 0.10.0 — 2026-10-25
 
 ### 新增

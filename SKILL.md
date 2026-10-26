@@ -2,7 +2,7 @@
 name: ego-decision-layer
 description: 多步线性浏览器任务（连续点击、翻页、搜索表单提交、导航跳转）的默认入口：用 `ego-decision-layer` 一条命令让决策层在单个 ego-browser 进程内闭环决策（默认 System One / Jev，可换本地 OpenAI 兼容后端；browser automation / multi-step click chain / form submit / navigation），不再每步退回大模型思考。单步动作、精确 DOM/选择器、批量抓取仍走 ego-browser 原生 API；也可把官方 ego-browser 技能入口接管成路由层。当任务涉及浏览器多步操作、要写 ego-browser nodejs 脚本（await import / fetch / 凭证落盘）时读它。
 metadata:
-  version: "0.10.0"
+  version: "0.11.0"
   date: "2026-10-25"
   requires: ego-browser
 ---
@@ -36,9 +36,9 @@ ZIP / 插件安装无匹配记录时需走原渠道。旧版本先按原渠道�
 
 默认 ego lite 路径的基础用法、Space/Page/选择器/收尾纪律仍以 `ego-browser` 技能为准。
 
-开发分支增加 `--cdp-endpoint <http(s)/ws(s) URL>`：普通 Node 22+ 连接外部 Chrome，创建专属页面，
+0.11.0 起提供 `--cdp-endpoint <http(s)/ws(s) URL>`：普通 Node 22+ 连接外部 Chrome，创建专属页面，
 不要求 ego lite，也不刷新官方技能路由。`--space` / `--keep` 不适用；`--keep-space` 保留新页面。
-此入口已通过双宿主受控任务验收，不属于 `v0.10.0` 已发布能力。真实 Jev 的 HN 导航与表单任务可用
+此入口已通过双宿主受控任务验收，自 `v0.11.0` 起随版本发布（真实 CDP 只在 macOS 上验证）。真实 Jev 的 HN 导航与表单任务可用
 `node scripts/../bench/test-host-integration-live.mjs --suite` 复验（需 Node 22+、Chrome 与凭证）；
 共同任务集用注入判定器，不能据此宣称模型成功率。
 

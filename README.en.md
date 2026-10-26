@@ -6,7 +6,7 @@ English · [简体中文](README.md)
 
 A pluggable decision layer for ego lite browser automation. By default, TypeSafe's System One model **Jev** reads an indexed element table and selects an operation and its target in one request. Code handles observation, execution, guards and completion checks. OpenAI-compatible decision backends are also supported.
 
-**Latest release: v0.10.0.** This release adds installation-aware `update` and `--version` commands, this English guide and a prioritized [roadmap](ROADMAP.md). It retains the existing execution engine and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
+**Latest release: v0.11.0.** This release adds the `--cdp-endpoint` external Chrome entry (plain Node, no ego lite required), the first batch of the shared two-host benchmark and an experimental MCP tool, `browser_task`. It retains the existing execution engine, `update` / `--version` and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
 
 ## Requirements and installation
 
@@ -73,11 +73,11 @@ The development branch adds `--cdp-endpoint` to connect from ordinary Node to an
   "type Jev into the search box and submit"
 ```
 
-CDP mode creates its own page and leaves the external browser and existing tabs open. Use `--keep-space` to retain the new page for inspection. Ego TaskSpace options `--space` and `--keep` cannot be combined with CDP mode. This path does not require ego lite or refresh agent routing. Jev credentials or an OpenAI-compatible decision backend are still required. Controlled tasks have passed on both hosts; this entry is not part of the v0.10.0 release. Run `node bench/test-host-integration-live.mjs --suite` with Node 22+, Chrome and Jev credentials to reproduce controlled acceptance, live HN navigation, form submission and shared CLI integration. Set `EGO_CDP_CHROME` to override the Chrome executable. Optional `--wiki` adds Wikipedia search, which has both succeeded and failed within a five-step budget.
+CDP mode creates its own page and leaves the external browser and existing tabs open. Use `--keep-space` to retain the new page for inspection. Ego TaskSpace options `--space` and `--keep` cannot be combined with CDP mode. This path does not require ego lite or refresh agent routing. Jev credentials or an OpenAI-compatible decision backend are still required. Controlled tasks have passed on both hosts; this entry ships with v0.11.0 (real CDP verified on macOS only). Run `node bench/test-host-integration-live.mjs --suite` with Node 22+, Chrome and Jev credentials to reproduce controlled acceptance, live HN navigation, form submission and shared CLI integration. Set `EGO_CDP_CHROME` to override the Chrome executable. Optional `--wiki` adds Wikipedia search, which has both succeeded and failed within a five-step budget.
 
 ## Update an installation
 
-Version 0.10.0 introduces:
+Since version 0.10.0:
 
 ```bash
 ego-decision-layer --version
