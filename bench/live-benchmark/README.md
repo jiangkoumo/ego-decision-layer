@@ -30,6 +30,15 @@ fallback can turn one logical ask into more than one HTTP attempt; `httpRequests
 counted inside each `askJev` wait window and reported separately. If a host runtime exposes
 no global `fetch`, that field is `null` with a reason, never guessed.
 
+**Timing contract:** the task `timeMs` clock starts before the initial navigation. Initial
+navigation has its own `goto` (15 s) and `waitForLoadState` (10 s) bounds, so it is not cut
+by the engine timer; however, elapsed navigation time is subtracted from the remaining
+engine budget (`remaining = timeMs - elapsed`). If no time remains, the engine is not
+started and the trial is a wall-clock failure. The verifier has a separate 10 s bound, so
+total trial latency can exceed `timeMs`, while the engine loop itself cannot exceed the
+remaining budget. `latencyMs` is total trial latency (navigation + engine + verifier) and
+`engineLatencyMs` is the engine-loop portion.
+
 Each trial is a task PASS only when **all** of these hold:
 
 1. the independent verifier passes (exact URL + DOM), and
@@ -102,9 +111,10 @@ Engine success was 10/12. The two failures are retained CDP Wiki trials
 rejected them because the page was not `/wiki/Jev`. They were not retried or re-budgeted.
 `falseSuccessRate` is 0 because no trial had engine success with a failed verifier.
 
-Failure consumption for the two failed trials: 6102 ms total engine+verify latency,
-10 logical asks / 10 HTTP attempts, 25218 input tokens and 2620 output tokens. `costUsd`
-is `null` (no pricing asserted) and human takeover is `null` (not instrumented).
+Failure consumption for the two failed trials: **6102 ms total trial latency** (including
+initial navigation and verifier; the engine-loop portion is **3409 ms**), 10 logical asks /
+10 HTTP attempts, 25218 input tokens and 2620 output tokens. `costUsd` is `null` (no pricing
+asserted) and human takeover is `null` (not instrumented).
 
 Cleanup evidence in the raw file: CDP `targetClosed: true`, `processStopped: true`,
 `profileRemoved: true`; ego `taskSpaceFinished: true`, `pagesBeforeFinish: ["p1"]`,
@@ -133,8 +143,16 @@ diagnostic runs and are **not** part of the 12 trials:
 - Live site content, network latency, login walls, captcha, region blocks and site changes
   can alter results. Task condition fields stay `unknown`; the verifier records observed
   password/captcha/region markers, and the absence of a marker is not proof of absence.
-- The wall-clock budget applies to the engine loop; initial navigation is outside that
-  budget but included in total latency. The logical ask budget is not an HTTP budget.
+- The wall-clock budget bounds the engine loop and is reduced by elapsed navigation; it
+  does not hard-cap initial navigation or the verifier. The logical ask budget is not an
+  HTTP budget.
+- Token-usage boundary: normal trials take `usage` from the engine result, falling back to
+  ask receipts; both start at zero. `failedTrial` (harness-level failure before a trial
+  starts) and `NOT_RUN` records contain zero placeholders, and a navigation failure or
+  timeout before any ask yields zero receipts. Those zeros mean **no usage observed**, not
+  a measured zero-cost run; read `usageSource` and the failure reason together. No trial in
+  the measured 12 hit this boundary (all had at least one logical ask). `costUsd` remains
+  `null` regardless.
 - No publishing, posting, account changes, payments or deletions are performed.
 - Cost in USD and human takeover are `null`; no unit price is invented.
 - This batch does not establish a general model or site success rate. Report the raw file,
