@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "p2-live-v1",
+  "generatedAt": "2026-10-26T08:46:15.496Z",
+  "status": "failed",
+  "complete": true,
+  "repoHead": "65b759ff3bba19de11c64a8b5f179dce01777a6a",
+  "runner": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "files": [
+      {
+        "path": "bench/live-benchmark/run.mjs",
+        "sha256": "66129620bc892141e71b1fdbc59470983bff59a915854a6b8238bcfb72cf9d67"
+      },
+      {
+        "path": "bench/live-benchmark/suite.mjs",
+        "sha256": "e18a848f84b0c6c1e141a6f9de4e2d811cec5f82edb624ed356c2a0f14a7b2c2"
+      },
+      {
+        "path": "bench/live-benchmark/tasks.mjs",
+        "sha256": "cf40ce41b69cb66f13d5857c1c046293a7dde7287af0ce8df284e0062bbead48"
+      },
+      {
+        "path": "bench/live-benchmark/verifiers.mjs",
+        "sha256": "daba93a757edbd5af6d02f1fd7c366cc22116d47a958bb26b3616983690fdb17"
+      },
+      {
+        "path": "scripts/decider-loop.mjs",
+        "sha256": "567500a0ee4784294bb7e32d59030da47acf689fb064df53f10e2db9940ec016"
+      }
+    ]
+  },
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "egoBrowserVersion": null,
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromeAvailable": true,
+    "externalEndpoint": false,
+    "credentialPresent": true,
+    "credentialSource": "file chain; value never read into the report"
+  },
+  "order": [
+    "cdp/hn-navigation/r1"
+  ],
+  "hosts": [
+    {
+      "host": "cdp",
+      "status": "completed",
+      "reason": null,
+      "hostVersion": "Chrome/156.0.8078.48",
+      "cleanup": {
+        "ok": true,
+        "ownedBrowser": true,
+        "targetClosed": true,
+        "processStopped": true,
+        "profileRemoved": true,
+        "externalBrowserPreserved": false,
+        "errors": []
+      },
+      "trialIds": [
+        "cdp/hn-navigation/r1"
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "trialId": "cdp/hn-navigation/r1",
+      "host": "cdp",
+      "taskId": "hn-navigation",
+      "round": 1,
+      "status": "FAILED",
+      "startedAt": "2026-10-26T08:46:11.724Z",
+      "finishedAt": "2026-10-26T08:46:15.453Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://news.ycombinator.com",
+        "pathname": "/newcomments"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 2,
+        "thrown": null,
+        "timedOut": false,
+        "requestBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": false,
+        "detail": "HN URL matched but the comment tree/DOM markers were missing",
+        "observed": {
+          "url": "https://news.ycombinator.com/newcomments",
+          "title": "New Comments | Hacker News",
+          "pathname": "/newcomments",
+          "search": "",
+          "hnMain": true,
+          "commentTree": false,
+          "commentRows": 30,
+          "itemLinks": 120,
+          "textSample": "\tHacker Newsnew | past | comments | ask | show | jobs | submit\tlogin\n\n\n\n\t\n\t\nElProlactin 0 minutes ago | parent | context | on: Amazon’s “digital pacifier” for toddlers\n\n\n> I'm not sure this product in isolation increases the number of table",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "falseSuccess": true,
+      "metrics": {
+        "latencyMs": 3729,
+        "navigationMs": 1764,
+        "engineLatencyMs": 1962,
+        "verifyMs": 3,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 2,
+        "dispatches": 2,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "phases": {
+          "observeMs": 19,
+          "decideMs": 1154,
+          "executeMs": 773,
+          "verifyMs": 11
+        },
+        "inputTokens": 11284,
+        "outputTokens": 1352,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 11284,
+          "output_tokens": 1352
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": "ref=3",
+          "targetLabel": "link \"new\" 当前值=空 /newest",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1317,
+          "phases": {
+            "observeMs": 11,
+            "decideMs": 871,
+            "executeMs": 428,
+            "verifyMs": 7
+          }
+        },
+        {
+          "step": 2,
+          "action": "click",
+          "target": "ref=5",
+          "targetLabel": "link \"comments\" 当前值=空 /newcomments",
+          "option": null,
+          "text": null,
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 640,
+          "phases": {
+            "observeMs": 8,
+            "decideMs": 283,
+            "executeMs": 345,
+            "verifyMs": 4
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 1317ms | click → ref=3 | 观测:dom",
+        "  └─ [Step 2] 640ms | click → ref=5 | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 2 步动作后确认目标已达成"
+      ]
+    }
+  ],
+  "summary": {
+    "expectedTrials": 1,
+    "total": 1,
+    "complete": true,
+    "verified": 0,
+    "failedTrials": 1,
+    "verifiedRate": 0,
+    "engineSuccessRate": 1,
+    "falseSuccess": 1,
+    "falseSuccessRate": 1,
+    "falseSuccessTrials": [
+      "cdp/hn-navigation/r1"
+    ],
+    "failedTrialIds": [
+      "cdp/hn-navigation/r1"
+    ],
+    "byHostTask": [
+      {
+        "host": "cdp",
+        "taskId": "hn-navigation",
+        "rounds": 1,
+        "verified": 0,
+        "engineSuccess": 1,
+        "falseSuccess": 1,
+        "medianEngineLatencyMs": 1962,
+        "medianTotalMs": 3729,
+        "logicalAskCalls": 2,
+        "httpRequests": 2,
+        "inputTokens": 11284,
+        "outputTokens": 1352
+      }
+    ],
+    "failureConsumption": {
+      "trials": 1,
+      "engineLatencyMs": 1962,
+      "totalLatencyMs": 3729,
+      "logicalAskCalls": 2,
+      "httpRequests": 2,
+      "inputTokens": 11284,
+      "outputTokens": 1352,
+      "costUsd": null,
+      "costUsdReason": "no pricing asserted; usage is recorded but not converted to dollars"
+    },
+    "cleanupFailures": [],
+    "harnessFailures": [],
+    "skippedHosts": [],
+    "order": [
+      "cdp/hn-navigation/r1"
+    ],
+    "unknownMetrics": {
+      "costUsd": "null: no pricing asserted",
+      "humanTakeover": "null: not instrumented in this batch",
+      "httpRequests": null
+    }
+  },
+  "limitations": [
+    "Small first batch: 1 tasks x 1 hosts x 1 rounds = 1 requested trials; this is not a population success rate.",
+    "Wikipedia has historically been variable under a 5-step budget. Wiki failures are retained in the raw file and are not retried or re-budgeted.",
+    "The logical ask budget counts wrapper calls, not HTTP attempts; backend fallback can produce more than one HTTP request per ask, reported separately as httpRequests.",
+    "Engine wall-clock timeout is enforced by a harness gate: after the timeout every later page/CDP call is rejected before dispatch, and host cleanup still runs.",
+    "Initial navigation is outside the engine wall-clock budget but included in total latency.",
+    "costUsd and humanTakeover are null: no pricing is asserted and takeover is not instrumented in this batch.",
+    "Only the local macOS environment (ego lite / headless Chrome) was measured; Windows and Linux hosts were not verified.",
+    "Condition fields in the task manifest stay unknown; the verifier records observed password/captcha/region markers, and absence of a marker is not proof of absence."
+  ]
+}

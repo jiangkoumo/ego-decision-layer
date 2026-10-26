@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "p2-live-v1",
+  "generatedAt": "2026-10-26T08:46:44.036Z",
+  "status": "failed",
+  "complete": true,
+  "repoHead": "65b759ff3bba19de11c64a8b5f179dce01777a6a",
+  "runner": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "files": [
+      {
+        "path": "bench/live-benchmark/run.mjs",
+        "sha256": "66129620bc892141e71b1fdbc59470983bff59a915854a6b8238bcfb72cf9d67"
+      },
+      {
+        "path": "bench/live-benchmark/suite.mjs",
+        "sha256": "e18a848f84b0c6c1e141a6f9de4e2d811cec5f82edb624ed356c2a0f14a7b2c2"
+      },
+      {
+        "path": "bench/live-benchmark/tasks.mjs",
+        "sha256": "cf40ce41b69cb66f13d5857c1c046293a7dde7287af0ce8df284e0062bbead48"
+      },
+      {
+        "path": "bench/live-benchmark/verifiers.mjs",
+        "sha256": "94ea49a7f671a357d183f425be2e0120a15d8c35d044c91e03f9b56879eb7b7f"
+      },
+      {
+        "path": "scripts/decider-loop.mjs",
+        "sha256": "567500a0ee4784294bb7e32d59030da47acf689fb064df53f10e2db9940ec016"
+      }
+    ]
+  },
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "egoBrowserVersion": null,
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromeAvailable": true,
+    "externalEndpoint": false,
+    "credentialPresent": true,
+    "credentialSource": "file chain; value never read into the report"
+  },
+  "order": [
+    "cdp/wiki-search/r1"
+  ],
+  "hosts": [
+    {
+      "host": "cdp",
+      "status": "completed",
+      "reason": null,
+      "hostVersion": "Chrome/156.0.8078.48",
+      "cleanup": {
+        "ok": true,
+        "ownedBrowser": true,
+        "targetClosed": true,
+        "processStopped": true,
+        "profileRemoved": true,
+        "externalBrowserPreserved": false,
+        "errors": []
+      },
+      "trialIds": [
+        "cdp/wiki-search/r1"
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "trialId": "cdp/wiki-search/r1",
+      "host": "cdp",
+      "taskId": "wiki-search",
+      "round": 1,
+      "status": "FAILED",
+      "startedAt": "2026-10-26T08:46:38.599Z",
+      "finishedAt": "2026-10-26T08:46:43.963Z",
+      "budget": {
+        "steps": 5,
+        "timeMs": 30000,
+        "decisionRequests": 5
+      },
+      "expected": {
+        "origin": "https://en.wikipedia.org",
+        "pathname": "/wiki/Jev"
+      },
+      "engine": {
+        "success": true,
+        "reason": "check_passed_after_step",
+        "steps": 5,
+        "thrown": null,
+        "timedOut": false,
+        "requestBudgetExceeded": false,
+        "navigationError": null
+      },
+      "verifier": {
+        "ok": false,
+        "detail": "Wiki path matched but article DOM was incomplete: heading=\"Jev\" longParagraphs=0",
+        "observed": {
+          "url": "https://en.wikipedia.org/wiki/Jev",
+          "title": "Jev - Wikipedia",
+          "pathname": "/wiki/Jev",
+          "search": "",
+          "heading": "Jev",
+          "content": true,
+          "paragraphCount": 1,
+          "longParagraphs": 0,
+          "textSample": "Jev or JEV can refer to:",
+          "loadError": null,
+          "domError": null,
+          "conditionSignals": {
+            "passwordInput": false,
+            "captchaMarker": false,
+            "regionBlockMarker": false,
+            "caveat": "true = marker observed in the final DOM; false does not prove absence"
+          }
+        }
+      },
+      "falseSuccess": true,
+      "metrics": {
+        "latencyMs": 5364,
+        "navigationMs": 2057,
+        "engineLatencyMs": 3298,
+        "verifyMs": 9,
+        "logicalAskCalls": 5,
+        "httpRequests": 5,
+        "httpUnmeasuredReason": null,
+        "httpAttempts": [
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          },
+          {
+            "url": "https://api.typesafe.ai/v1/systemone",
+            "status": 200,
+            "ok": true,
+            "error": null
+          }
+        ],
+        "decisionRequests": 5,
+        "dispatches": 5,
+        "latePageCalls": 0,
+        "lateDispatchAttempts": 0,
+        "phases": {
+          "observeMs": 112,
+          "decideMs": 2083,
+          "executeMs": 1078,
+          "verifyMs": 15
+        },
+        "inputTokens": 13465,
+        "outputTokens": 1498,
+        "usageSource": "engine-result",
+        "modelErrors": 0
+      },
+      "model": {
+        "requested": "jev-latest",
+        "serverModels": [
+          "jev-1.14.0"
+        ],
+        "serverEndpoints": [
+          "https://api.typesafe.ai/v1"
+        ],
+        "usage": {
+          "input_tokens": 13465,
+          "output_tokens": 1498
+        },
+        "usageSource": "engine-result",
+        "errors": []
+      },
+      "stopReason": "check_passed_after_step",
+      "history": [
+        {
+          "step": 1,
+          "action": "click",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": true,
+          "error": null,
+          "stepDurationMs": 931,
+          "phases": {
+            "observeMs": 9,
+            "decideMs": 919,
+            "executeMs": 0,
+            "verifyMs": 3
+          }
+        },
+        {
+          "step": 2,
+          "action": "scroll_up",
+          "target": null,
+          "targetLabel": "",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 398,
+          "phases": {
+            "observeMs": 73,
+            "decideMs": 319,
+            "executeMs": 4,
+            "verifyMs": 2
+          }
+        },
+        {
+          "step": 3,
+          "action": "click",
+          "target": "ref=2",
+          "targetLabel": "link \"Search\" 当前值=空 /wiki/Special:Search",
+          "option": null,
+          "text": null,
+          "changed": false,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 469,
+          "phases": {
+            "observeMs": 12,
+            "decideMs": 267,
+            "executeMs": 188,
+            "verifyMs": 2
+          }
+        },
+        {
+          "step": 4,
+          "action": "type_text_submit",
+          "target": "ref=35",
+          "targetLabel": "searchbox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": false,
+          "guardRejected": "disconnected",
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 312,
+          "phases": {
+            "observeMs": 11,
+            "decideMs": 297,
+            "executeMs": 0,
+            "verifyMs": 4
+          }
+        },
+        {
+          "step": 5,
+          "action": "type_text_submit",
+          "target": "ref=37",
+          "targetLabel": "combobox \"Search Wikipedia\" 当前值=空",
+          "option": null,
+          "text": "Jev",
+          "changed": true,
+          "guardRejected": null,
+          "staleTarget": null,
+          "targetMissing": false,
+          "error": null,
+          "stepDurationMs": 1178,
+          "phases": {
+            "observeMs": 7,
+            "decideMs": 281,
+            "executeMs": 886,
+            "verifyMs": 4
+          }
+        }
+      ],
+      "engineLog": [
+        "  └─ [Step 1] 931ms | click | 观测:dom | ⚠️ 选了需要目标的动作但未解析出可执行目标",
+        "  └─ [Step 1] 目标在视口外：下滚一屏后重新观测（第 1/4 次）",
+        "  └─ [Step 2] 398ms | scroll_up | 观测:dom",
+        "  └─ [Step 3] 469ms | click → ref=2 | 观测:dom",
+        "  └─ [Step 4] 312ms | type_text_submit → ref=35 \"Jev\" | 观测:dom | ⚠️ 执行前守卫拒绝: disconnected",
+        "  └─ [Step 5] 1178ms | type_text_submit → ref=37 \"Jev\" | 观测:dom",
+        "✅ [Ego-Jev] check() 在第 5 步动作后确认目标已达成"
+      ]
+    }
+  ],
+  "summary": {
+    "expectedTrials": 1,
+    "total": 1,
+    "complete": true,
+    "verified": 0,
+    "failedTrials": 1,
+    "verifiedRate": 0,
+    "engineSuccessRate": 1,
+    "falseSuccess": 1,
+    "falseSuccessRate": 1,
+    "falseSuccessTrials": [
+      "cdp/wiki-search/r1"
+    ],
+    "failedTrialIds": [
+      "cdp/wiki-search/r1"
+    ],
+    "byHostTask": [
+      {
+        "host": "cdp",
+        "taskId": "wiki-search",
+        "rounds": 1,
+        "verified": 0,
+        "engineSuccess": 1,
+        "falseSuccess": 1,
+        "medianEngineLatencyMs": 3298,
+        "medianTotalMs": 5364,
+        "logicalAskCalls": 5,
+        "httpRequests": 5,
+        "inputTokens": 13465,
+        "outputTokens": 1498
+      }
+    ],
+    "failureConsumption": {
+      "trials": 1,
+      "engineLatencyMs": 3298,
+      "totalLatencyMs": 5364,
+      "logicalAskCalls": 5,
+      "httpRequests": 5,
+      "inputTokens": 13465,
+      "outputTokens": 1498,
+      "costUsd": null,
+      "costUsdReason": "no pricing asserted; usage is recorded but not converted to dollars"
+    },
+    "cleanupFailures": [],
+    "harnessFailures": [],
+    "skippedHosts": [],
+    "order": [
+      "cdp/wiki-search/r1"
+    ],
+    "unknownMetrics": {
+      "costUsd": "null: no pricing asserted",
+      "humanTakeover": "null: not instrumented in this batch",
+      "httpRequests": null
+    }
+  },
+  "limitations": [
+    "Small first batch: 1 tasks x 1 hosts x 1 rounds = 1 requested trials; this is not a population success rate.",
+    "Wikipedia has historically been variable under a 5-step budget. Wiki failures are retained in the raw file and are not retried or re-budgeted.",
+    "The logical ask budget counts wrapper calls, not HTTP attempts; backend fallback can produce more than one HTTP request per ask, reported separately as httpRequests.",
+    "Engine wall-clock timeout is enforced by a harness gate: after the timeout every later page/CDP call is rejected before dispatch, and host cleanup still runs.",
+    "Initial navigation is outside the engine wall-clock budget but included in total latency.",
+    "costUsd and humanTakeover are null: no pricing is asserted and takeover is not instrumented in this batch.",
+    "Only the local macOS environment (ego lite / headless Chrome) was measured; Windows and Linux hosts were not verified.",
+    "Condition fields in the task manifest stay unknown; the verifier records observed password/captcha/region markers, and absence of a marker is not proof of absence."
+  ]
+}
