@@ -2,8 +2,8 @@
 name: ego-decision-layer
 description: 多步线性浏览器任务（连续点击、翻页、搜索表单提交、导航跳转）的默认入口：用 `ego-decision-layer` 一条命令让决策层在单个 ego-browser 进程内闭环决策（默认 System One / Jev，可换本地 OpenAI 兼容后端；browser automation / multi-step click chain / form submit / navigation），不再每步退回大模型思考。单步动作、精确 DOM/选择器、批量抓取仍走 ego-browser 原生 API；也可把官方 ego-browser 技能入口接管成路由层。当任务涉及浏览器多步操作、要写 ego-browser nodejs 脚本（await import / fetch / 凭证落盘）时读它。
 metadata:
-  version: "0.11.0"
-  date: "2026-10-25"
+  version: "0.12.0"
+  date: "2026-10-26"
   requires: ego-browser
 ---
 # ego-decision-layer — 给 ego-browser 装一个可插拔的决策层
@@ -17,7 +17,7 @@ metadata:
 | --- | --- |
 | `scripts/decider-loop.mjs` | 引擎（决策闭环、元素表解析、退出判定） |
 | `scripts/ego-decision-layer` | 命令行入口（会自动在 同目录 / 仓库根 / `~/.agents/lib/` 里找引擎） |
-| `scripts/run-cdp-task.mjs` | 开发分支的普通 Node + 外部 Chrome CDP 入口 |
+| `scripts/run-cdp-task.mjs` | 普通 Node + 外部 Chrome CDP 入口（v0.11.0 起） |
 | `scripts/wire-agent-skills.sh` | 把 Agent 技能目录里的官方 `ego-browser` 入口接管成**路由层**（见下节） |
 | `overlay/ego-browser/SKILL.md.in` | 路由层的模板（接管时生成，正文仍指向 App 当前版本） |
 | `examples/bench/` | 对照基准脚本（A 组 Jev 闭环 vs B 组经典循环） |
