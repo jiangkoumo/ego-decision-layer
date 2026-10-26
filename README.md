@@ -9,7 +9,7 @@
 > **当前能力**：线性操作闭环、结构化抽取、动作缓存、批处理和 Canvas/SVG 图形区域兜底。
 > 各能力都有对应测试，见[功能验证](#功能验证)；历史性能数据的条件与复跑脚本见[测量与复跑基准](#测量与复跑基准)。
 > [`CHANGELOG.md`](CHANGELOG.md) 保留修复记录和被实测推翻的旧结论，代码级溯源见 [`THIRD-PARTY.md`](THIRD-PARTY.md)。
-> **最新版 `v0.11.0`**：新增 `--cdp-endpoint` 外部 Chrome 入口（普通 Node，无需 ego lite）、双宿主共同基准第一批，以及实验性 MCP 工具 `browser_task`；[发布页](https://github.com/jiangkoumo/ego-decision-layer/releases/latest)提供对应源码下载。不同安装方式的更新规则见[下载与更新渠道](#下载与更新渠道)。
+> **最新版 `v0.12.0`**：P2 第二批受控集扩至 12 项，新增真实 Jev 的 HN / Wikipedia 双宿主测量入口，并补齐超时、启动失败和资源清理的异常路径回归。首批十二次试验为 10 次达成、错误成功 0；复跑命令、原始记录与小样本限制见[测量说明](bench/live-benchmark/README.md)。[发布页](https://github.com/jiangkoumo/ego-decision-layer/releases/latest)提供源码下载；不同安装方式的更新规则见[下载与更新渠道](#下载与更新渠道)。
 
 > English summary: `ego-decision-layer` replaces the per-step LLM round trip in browser automation with
 > [TypeSafe](https://docs.typesafe.ai)'s System One model **Jev**. Jev reads one *indexed element
@@ -125,9 +125,9 @@
 
 更多示例：[复用已有页面与 JS API](#用法)、[结构化数据抽取](#结构化抽取缓存与批处理)、[文本生成配置](#文本生成可选)。完整参数运行 `ego-decision-layer --help` 查看。
 
-### 外部 Chrome（开发分支）
+### 外部 Chrome（v0.11.0 起）
 
-当前开发分支新增 `--cdp-endpoint`，让普通 Node 连接已启用远程调试的外部 Chrome；需要 Node 22+。
+`--cdp-endpoint` 让普通 Node 连接已启用远程调试的外部 Chrome；需要 Node 22+。
 默认 ego lite 入口继续使用 `ego-browser`。CDP 模式不需要 ego lite，也不刷新 Agent 的 ego-browser 路由。
 
 ```bash
@@ -188,7 +188,7 @@ cd ego-decision-layer
 
 ### 下载与更新渠道
 
-`metadata.version` 当前为 `0.11.0`。`ego-decision-layer update [--test]` 与 `--version` 自 0.10.0 起提供。
+`metadata.version` 当前为 `0.12.0`。`ego-decision-layer update [--test]` 与 `--version` 自 0.10.0 起提供。
 Git 安装按当前分支上游 fast-forward，skills 拷贝按安装记录定向更新并保留原作用域；
 ZIP / 插件安装没有匹配记录时需走原渠道。旧版本先按原渠道更新一次，才能获得新子命令。
 已跟踪文件有未提交改动时更新停止并非零退出，普通未跟踪文件保留，冲突由 Git 拒绝覆盖。
@@ -207,7 +207,7 @@ ego-decision-layer update --test   # 更新后运行真实浏览器冒烟
 | 新 `git clone`，默认分支 `main` | 是 |
 | 跟踪 `main` 的克隆执行 `git pull --ff-only` / `ego-decision-layer update` | 更新成功后包含；已跟踪文件有未提交改动时更新会停止并非零退出 |
 | GitHub 下载 `main` 的 ZIP | 是，内容以下载时的 `main` 为准 |
-| 下载 `v0.11.0`、`v0.10.0` 或 `v0.9.1` 发布页或标签的 ZIP/tar.gz | 是 |
+| 下载 `v0.12.0`、`v0.11.0`、`v0.10.0` 或 `v0.9.1` 发布页或标签的 ZIP/tar.gz | 是 |
 | 下载 `v0.9.0` 标签的 ZIP/tar.gz，或固定该标签/更早提交 | 否，需要更新到 `v0.9.1` 或含修复的提交 |
 | `npx skills add jiangkoumo/ego-decision-layer` | 未固定 ref 时获取仓库默认分支；已有拷贝需要重新安装更新，不会随合并自动变化 |
 | Claude Code 插件市场安装 | 已安装的插件可能仍使用缓存；需更新 marketplace 和已安装插件，再核对其实际代码 |

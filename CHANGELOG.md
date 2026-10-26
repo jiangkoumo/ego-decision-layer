@@ -7,6 +7,34 @@
 每个版本按 **新增 / 修复 / 更正 / 未验证** 分组。「更正」记的是被实测推翻的旧结论，
 不是新功能；「未验证」如实列出还没测过的边界。
 
+## 0.12.0 — 2026-10-26
+
+### 新增
+
+- P2 共同受控基准第二批（Issue #14）：保留十项 `p2-controlled-v1` 历史清单，新增十二项 `p2-controlled-v2`，直接复用 P1 的 `no-text-source` 与 `batch-two-fields`；细分预期拒绝原因，补齐步数、请求、时间预算与清理失败的报告检查。
+- 真实 Jev 双宿主基准首批（Issue #15，`bench/live-benchmark/`）：HN 导航和 Wikipedia 搜索使用相同任务、候选文本、预算与独立 URL + DOM 验证器；显式 `--live` 才联网，支持宿主、任务和轮数选择，保留逐轮数据、实际模型版本、延迟与失败消耗。
+- 分别记录逻辑 ask 调用与 HTTP 尝试；缺失、部分或未结算的 token usage 按字段传播 `null` 和原因，不将未知消耗记为零。
+
+### 修复
+
+- 墙钟超时后，在 HTTP 派发边界阻止同一次 `askJev` 内新增的 fallback 请求；在途请求的未知 usage 继续如实报告。
+- ego 子进程启动错误进入正常失败与清理流程，保留此前已完成的宿主结果。
+- staging 复制、建目录或哈希失败时清理已创建目录；清理失败保留证据。
+- CDP 部分连接失败时，宿主 `cleanupProblems` 合入最终报告，不能把 target 清理失败显示为正常。
+- 新增四条独立 Node 进程故障回归，接入 `bench/test-live-benchmark.mjs`；根文档同步 CDP / MCP 已发布状态。
+
+### 验证
+
+- `node bench/common-benchmark/run.mjs --hosts both --out /tmp/issue14-p2-controlled-v2-final.json`：exit 0，两个宿主各 12/12，错误成功、网络请求和控制停止后调用均为 0，清理已确认。
+- `node bench/live-benchmark/run.mjs --live --hosts both --tasks all --rounds 3`：十二次试验全部完成，10/12 达成，错误成功与清理失败均为 0；模型 `jev-1.14.0`。HN 两宿主各 3/3；Wikipedia CDP 1/3、ego 3/3，两次 CDP 失败均达到五步上限，命令如实 exit 1。原始记录与脚本哈希见 `bench/live-benchmark/README.md`。
+- 四条异常路径回归在修复前均 exit 1，修复后均 exit 0；独立只读复审确认全部关闭。合并前后离线基准检查、依赖不变量与版本一致性检查通过。
+
+### 未验证
+
+- 本批只在 macOS arm64 实测；Windows / Linux、远程或用户提供的外部 CDP endpoint 未验证。
+- 真实站点仅两任务、每宿主每任务三轮；小样本不能外推普遍成功率，也不能证明宿主性能差异。费用与人工接管仍为 `null`。
+- 原始十二次数据保留当时脚本哈希；后续异常路径修复未覆盖重写原始数据，也未重复站点测量。
+
 ## 0.11.0 — 2026-10-26
 
 ### 新增

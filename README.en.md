@@ -6,7 +6,7 @@ English · [简体中文](README.md)
 
 A pluggable decision layer for ego lite browser automation. By default, TypeSafe's System One model **Jev** reads an indexed element table and selects an operation and its target in one request. Code handles observation, execution, guards and completion checks. OpenAI-compatible decision backends are also supported.
 
-**Latest release: v0.11.0.** This release adds the `--cdp-endpoint` external Chrome entry (plain Node, no ego lite required), the first batch of the shared two-host benchmark and an experimental MCP tool, `browser_task`. It retains the existing execution engine, `update` / `--version` and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
+**Latest release: v0.12.0.** This release expands the controlled benchmark to 12 tasks, adds an initial real Jev two-host benchmark for HN and Wikipedia, and covers timeout, launch and resource-cleanup failures with offline regressions. It retains the external Chrome CDP entry, experimental MCP tools, `update` / `--version` and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
 
 ## Requirements and installation
 
@@ -62,9 +62,9 @@ Verify all three: exit code `0`, `success: true`, and a final URL containing `/w
 
 Exit codes: `0` success, `1` goal not reached, `2` invalid arguments, `3` missing Jev credentials. Successful tasks close their TaskSpace by default. Failed tasks retain it for inspection and report its ID. Prefer URL paths or DOM state over UI-string checks, because automatic translation can change labels.
 
-## External Chrome (in development)
+## External Chrome (since v0.11.0)
 
-The development branch adds `--cdp-endpoint` to connect from ordinary Node to an external Chrome with remote debugging enabled. It requires Node 22+. The default ego lite entry continues to use `ego-browser`.
+Use `--cdp-endpoint` to connect from ordinary Node to an external Chrome with remote debugging enabled. It requires Node 22+. The default ego lite entry continues to use `ego-browser`.
 
 ```bash
 ./scripts/ego-decision-layer --cdp-endpoint http://127.0.0.1:9222 \
@@ -100,7 +100,7 @@ Git installations fast-forward from the current branch's upstream. Skill copies 
 | Action batches | Execute backend-provided action sequences with preflight guards and one final settle; default Jev does not automatically generate batches |
 | Canvas/SVG fallback | Scan geometric regions and accept an injected `visualGrounder`; the default single-region strategy clicks its center and does not interpret image pixels |
 | Decision backends | Default System One; configurable OpenAI-compatible backends retain execution guards but do not provide calibrated confidence |
-| Host support | ego lite; external Chrome CDP has passed controlled acceptance in development; MCP is planned |
+| Host support | ego lite and external Chrome CDP (Node 22+); v0.11.0 also ships an optional experimental stdio MCP entry. Real CDP/MCP runs have been verified on macOS only |
 
 A cache hit with `decideMs = 0` only means the model request was skipped. Observation, validation and execution still take time. Actions with uncertain outcomes stop rather than being blindly replayed. Keyword guards are heuristic, cross-origin iframes are unsupported, and real CAPTCHA handling has not been validated.
 
@@ -146,7 +146,7 @@ The [Chinese guide](README.md) lists browser integration tests and additional re
 
 ## Next steps
 
-The [roadmap](ROADMAP.md) prioritizes a minimal Host Adapter and an external Chrome CDP connection, a shared deterministic task suite, then MCP. Image grounding, additional decision backends and bounded escalation to a larger model require separate validation. ego lite remains a first-class host.
+The [roadmap](ROADMAP.md) records the Host Adapter, external Chrome CDP entry, first shared controlled task suite and minimal MCP entry delivered in v0.11.0. Version 0.12.0 delivers the second benchmark batch: 12 controlled tasks and an initial real Jev two-host measurement. See the [live benchmark guide](bench/live-benchmark/README.md) for its fixed command, raw results and small-sample limits. Image grounding, additional decision backends and bounded escalation to a larger model require separate validation. ego lite remains a first-class host.
 
 ## Attribution and license
 

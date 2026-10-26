@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "p2-live-v1",
+  "generatedAt": "2026-10-26T08:51:36.824Z",
+  "status": "failed",
+  "complete": false,
+  "repoHead": "65b759ff3bba19de11c64a8b5f179dce01777a6a",
+  "runner": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "files": [
+      {
+        "path": "bench/live-benchmark/run.mjs",
+        "sha256": "a046ab45d95ca56231b892a488bc3a0007f47faf975113ea5d5814287a41bfbb"
+      },
+      {
+        "path": "bench/live-benchmark/suite.mjs",
+        "sha256": "5af2b9fceadad96ca02c1060f09dd96ebf4fc5f29dab4b9908b57f4fbaef6544"
+      },
+      {
+        "path": "bench/live-benchmark/tasks.mjs",
+        "sha256": "cf40ce41b69cb66f13d5857c1c046293a7dde7287af0ce8df284e0062bbead48"
+      },
+      {
+        "path": "bench/live-benchmark/verifiers.mjs",
+        "sha256": "41acbe566be09d3add181d6f0cfd92edff886b24d27fae8902cc4c6ba0b8b9a2"
+      },
+      {
+        "path": "scripts/decider-loop.mjs",
+        "sha256": "567500a0ee4784294bb7e32d59030da47acf689fb064df53f10e2db9940ec016"
+      }
+    ]
+  },
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "egoBrowserVersion": "ego-browser 0.6.0.20",
+    "chromePath": "~/.local/bin/node",
+    "chromeAvailable": true,
+    "externalEndpoint": false,
+    "credentialPresent": true,
+    "credentialSource": "file chain; value never read into the report"
+  },
+  "order": [
+    "cdp/hn-navigation/r1"
+  ],
+  "hosts": [
+    {
+      "host": "cdp",
+      "status": "failed",
+      "reason": "Chrome exited before CDP became ready",
+      "hostVersion": null,
+      "cleanup": {
+        "ok": true,
+        "ownedBrowser": true,
+        "targetClosed": null,
+        "processStopped": true,
+        "profileRemoved": true,
+        "externalBrowserPreserved": false,
+        "errors": []
+      },
+      "trialIds": [],
+      "notRunIds": [],
+      "notRun": []
+    }
+  ],
+  "trials": [],
+  "summary": {
+    "expectedTrials": 1,
+    "total": 0,
+    "notRun": 0,
+    "notRunIds": [],
+    "complete": false,
+    "verified": 0,
+    "verifierOk": 0,
+    "failedTrials": 0,
+    "verifiedRate": null,
+    "verifierOkRate": null,
+    "engineSuccessRate": null,
+    "falseSuccess": 0,
+    "falseSuccessRate": null,
+    "falseSuccessTrials": [],
+    "failedTrialIds": [],
+    "byHostTask": [],
+    "failureConsumption": {
+      "trials": 0,
+      "engineLatencyMs": 0,
+      "totalLatencyMs": 0,
+      "logicalAskCalls": 0,
+      "httpRequests": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": null,
+      "costUsdReason": "no pricing asserted; usage is recorded but not converted to dollars"
+    },
+    "cleanupFailures": [],
+    "harnessFailures": [
+      {
+        "host": "cdp",
+        "reason": "Chrome exited before CDP became ready"
+      }
+    ],
+    "skippedHosts": [],
+    "order": [
+      "cdp/hn-navigation/r1"
+    ],
+    "unknownMetrics": {
+      "costUsd": "null: no pricing asserted",
+      "humanTakeover": "null: not instrumented in this batch",
+      "httpRequests": null
+    }
+  },
+  "limitations": [
+    "Small first batch: 1 tasks x 1 hosts x 1 rounds = 1 requested trials; this is not a population success rate.",
+    "Wikipedia has historically been variable under a 5-step budget. Wiki failures are retained in the raw file and are not retried or re-budgeted.",
+    "The logical ask budget counts wrapper calls, not HTTP attempts; backend fallback can produce more than one HTTP request per ask, reported separately as httpRequests.",
+    "Engine wall-clock timeout is enforced by a harness gate: after the timeout every later page/CDP call is rejected before dispatch, and host cleanup still runs.",
+    "Initial navigation is outside the engine wall-clock budget but included in total latency.",
+    "costUsd and humanTakeover are null: no pricing is asserted and takeover is not instrumented in this batch.",
+    "Only the local macOS environment (ego lite / headless Chrome) was measured; Windows and Linux hosts were not verified.",
+    "Condition fields in the task manifest stay unknown; the verifier records observed password/captcha/region markers, and absence of a marker is not proof of absence."
+  ]
+}
