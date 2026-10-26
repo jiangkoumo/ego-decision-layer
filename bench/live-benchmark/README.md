@@ -91,6 +91,14 @@ Raw evidence: [`raw/live-2026-10-26T08-52-43-090Z.json`](raw/live-2026-10-26T08-
 The file is sanitized; `runner.files` records the SHA-256 of each script at run time, and
 `repoHead` records the base commit `65b759f`.
 
+These raw samples were produced by the scripts in implementation commit `c2f3fce`;
+`4304364` corrected documentation only. The subsequent token-accounting fix derives new
+trial usage from settled ask receipts rather than the engine's zero-initialized aggregate,
+and propagates missing usage through summaries. The original raw file and its recorded
+script hashes remain unchanged. `node bench/test-live-benchmark.mjs` recomputes its summary
+offline and checks that the per-host/task token totals and failure consumption below are
+unchanged; no live trial was rerun for this fix.
+
 Environment (from the raw file): macOS arm64, Node `v22.22.2`, ego-browser `0.6.0.20`,
 external Chrome `156.0.8078.48`, Jev server model `jev-1.14.0` (request alias
 `jev-latest`), credentials read only through the existing file chain.
@@ -146,13 +154,18 @@ diagnostic runs and are **not** part of the 12 trials:
 - The wall-clock budget bounds the engine loop and is reduced by elapsed navigation; it
   does not hard-cap initial navigation or the verifier. The logical ask budget is not an
   HTTP budget.
-- Token-usage boundary: normal trials take `usage` from the engine result, falling back to
-  ask receipts; both start at zero. `failedTrial` (harness-level failure before a trial
-  starts) and `NOT_RUN` records contain zero placeholders, and a navigation failure or
-  timeout before any ask yields zero receipts. Those zeros mean **no usage observed**, not
-  a measured zero-cost run; read `usageSource` and the failure reason together. No trial in
-  the measured 12 hit this boundary (all had at least one logical ask). `costUsd` remains
-  `null` regardless.
+- Token usage is established from each settled ask receipt, separately for input and
+  output tokens. The engine's aggregate is not used as evidence because it starts at zero
+  even when the backend omits usage. A missing/invalid field, an in-flight ask at report
+  time, or earlier fallback/retry HTTP attempts with unavailable usage produces `null`
+  for the affected total and an explanation in `usageReasons`. Observed zero tokens stay
+  zero. A trial with no logical asks has known zero usage (`usageSource:
+  "no-model-requests"`), including a navigation failure before any ask.
+- Unexpected harness errors have unknown usage (`null`, source `unavailable`); `NOT_RUN`
+  records carry `null` with source `not-run` and an explicit not-applicable reason.
+  Host/task totals and `failureConsumption` propagate any unknown token field as `null`
+  with reasons identifying the affected trials. Not-run entries remain outside attempted
+  trial/failure consumption, and are listed separately. `costUsd` remains `null`.
 - No publishing, posting, account changes, payments or deletions are performed.
 - Cost in USD and human takeover are `null`; no unit price is invented.
 - This batch does not establish a general model or site success rate. Report the raw file,

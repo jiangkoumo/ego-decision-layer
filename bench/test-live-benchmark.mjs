@@ -7,7 +7,8 @@
 
 import assert from 'node:assert/strict';
 import { getTask } from './live-benchmark/tasks.mjs';
-import { runTrial, runHostTrials, summarizeLive } from './live-benchmark/suite.mjs';
+import { runTrial, runHostTrials, failedTrial, notRunTrial, summarizeLive } from './live-benchmark/suite.mjs';
+import { readFile } from 'node:fs/promises';
 import { parseArgs, preflightHosts, runLiveBenchmark, exitCodeFor, sanitizeText } from './live-benchmark/run.mjs';
 
 const HN_URL = 'https://news.ycombinator.com/newcomments';
@@ -296,10 +297,174 @@ const hnEmptyDom = { ...hnOkDom, hnMain: true, commentTree: false, commentRows: 
   assert.ok(text.includes('<repo>'));
 }
 
+// 10) An engine aggregate of zero cannot hide missing/partial backend usage.
+// Individual ask receipts establish each token field independently, including real zero.
+{
+  const task = getTask('hn-navigation');
+  const runWithUsage = async (receipts) => runTrial(fakePage({ dom: hnEmptyDom }), task, {
+    host: 'usage', round: 1,
+    engine: {
+      async askJev(_state, _questions, options) {
+        const usage = receipts.shift();
+        if (usage !== undefined) options.receipt.usage = usage;
+        return {};
+      },
+      async runJevAutonomousLoop(_page, _goal, options) {
+        const count = receipts.length;
+        for (let i = 0; i < count; i++) await options.ask('', {});
+        return { success: false, steps: 1, usage: { input_tokens: 0, output_tokens: 0 } };
+      },
+    },
+  });
+  const missing = await runWithUsage([undefined]);
+  assert.equal(missing.metrics.inputTokens, null);
+  assert.equal(missing.metrics.outputTokens, null);
+  assert.match(missing.metrics.usageReasons.inputTokens, /backend did not return/);
+  assert.equal(missing.model.usage.input_tokens, null);
+
+  const partial = await runWithUsage([{ input_tokens: 12, output_tokens: 0 }, { input_tokens: 3 }]);
+  assert.equal(partial.metrics.inputTokens, 15);
+  assert.equal(partial.metrics.outputTokens, null);
+  assert.equal(partial.metrics.usageReasons.inputTokens, null);
+  assert.match(partial.metrics.usageReasons.outputTokens, /ask 2/);
+
+  const invalid = await runWithUsage([{ input_tokens: -1, output_tokens: '0' }]);
+  assert.equal(invalid.metrics.inputTokens, null);
+  assert.equal(invalid.metrics.outputTokens, null);
+
+  // The engine may reuse its receipt; a later missing usage must not reuse old tokens.
+  const reusedReceipt = await runTrial(fakePage({ dom: hnEmptyDom }), task, { host: 'usage', round: 1, engine: {
+    async askJev(_state, _questions, options) {
+      assert.equal(options.receipt.usage, undefined);
+      if (!this.seen) options.receipt.usage = { input_tokens: 7, output_tokens: 1 };
+      this.seen = true;
+      return {};
+    },
+    async runJevAutonomousLoop(_page, _goal, options) {
+      const receipt = {};
+      await options.ask('', {}, { receipt });
+      assert.equal(receipt.usage.input_tokens, 7);
+      await options.ask('', {}, { receipt });
+      assert.equal(receipt.usage, null);
+      return { success: false };
+    },
+  } });
+  assert.equal(reusedReceipt.metrics.inputTokens, null);
+  assert.match(reusedReceipt.metrics.usageReasons.inputTokens, /ask 2/);
+
+  const known = await runWithUsage([{ input_tokens: 7, output_tokens: 0 }]);
+  assert.equal(known.metrics.inputTokens, 7);
+  assert.equal(known.metrics.outputTokens, 0);
+  assert.equal(known.metrics.usageSource, 'ask-receipts');
+  const noAsks = await runWithUsage([]);
+  assert.equal(noAsks.metrics.inputTokens, 0);
+  assert.equal(noAsks.metrics.outputTokens, 0);
+  assert.equal(noAsks.metrics.usageSource, 'no-model-requests');
+
+  // Mixed known/unknown failure consumption and host/task grouping must preserve null.
+  const summary = summarizeLive([known, missing]);
+  assert.equal(summary.failureConsumption.inputTokens, null);
+  assert.equal(summary.failureConsumption.outputTokens, null);
+  assert.match(summary.failureConsumption.usageReasons.inputTokens, /backend did not return/);
+  assert.equal(summary.byHostTask[0].inputTokens, null);
+  assert.match(summary.unknownMetrics.tokens.inputTokens, /backend did not return/);
+  const partialSummary = summarizeLive([known, partial]);
+  assert.equal(partialSummary.failureConsumption.inputTokens, 22);
+  assert.equal(partialSummary.failureConsumption.outputTokens, null);
+
+  const harnessError = failedTrial(task, { host: 'usage', round: 1 }, new Error('unexpected'));
+  const notRun = notRunTrial(task, { host: 'usage', round: 2 }, 'previous engine unsettled');
+  for (const row of [harnessError, notRun]) {
+    assert.equal(row.metrics.inputTokens, null);
+    assert.equal(row.metrics.outputTokens, null);
+    assert.ok(row.metrics.usageReasons.inputTokens);
+    assert.equal(row.model.usage.output_tokens, null);
+  }
+  assert.equal(notRun.metrics.usageSource, 'not-run');
+}
+
+// 11) A pending ask is unknown at the reporting boundary, even if it later returns
+// usage. Release the mock afterward so its fetch wrapper is restored before other work.
+{
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const originalFetch = globalThis.fetch;
+  const task = { ...getTask('hn-navigation'), budget: { steps: 5, timeMs: 25, decisionRequests: 5, settleGraceMs: 10 } };
+  const engine = {
+    async askJev(_state, _questions, options) {
+      await pending;
+      options.receipt.usage = { input_tokens: 5, output_tokens: 1 };
+      return {};
+    },
+    async runJevAutonomousLoop(_page, _goal, options) {
+      await options.ask('', {});
+      return { success: false, history: [] };
+    },
+  };
+  const trial = await runTrial(fakePage({ dom: hnEmptyDom }), task, { host: 'usage', round: 1, engine });
+  try {
+    assert.equal(trial.engine.unsettled, true);
+    assert.equal(trial.metrics.inputTokens, null);
+    assert.equal(trial.metrics.outputTokens, null);
+    assert.match(trial.metrics.usageReasons.inputTokens, /not settled/);
+  } finally {
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.equal(globalThis.fetch, originalFetch);
+  assert.equal(trial.metrics.inputTokens, null, 'late usage cannot rewrite the recorded trial');
+}
+
+// 12) A rejected backend request or fallback attempt lacks a complete usage receipt.
+{
+  const task = getTask('hn-navigation');
+  const page = fakePage({ dom: hnEmptyDom });
+  const rejected = await runTrial(page, task, { host: 'usage', round: 1, engine: {
+    async askJev() { throw new Error('backend failed without usage'); },
+    async runJevAutonomousLoop(_page, _goal, options) { await options.ask('', {}); },
+  } });
+  assert.equal(rejected.metrics.inputTokens, null);
+  assert.match(rejected.metrics.usageReasons.inputTokens, /backend did not return/);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200, ok: true });
+  try {
+    const fallback = await runTrial(page, task, { host: 'usage', round: 2, engine: {
+      async askJev(_state, _questions, options) {
+        await fetch('https://primary.invalid/systemone');
+        await fetch('https://fallback.invalid/systemone');
+        options.receipt.usage = { input_tokens: 8, output_tokens: 2 };
+        return {};
+      },
+      async runJevAutonomousLoop(_page, _goal, options) { await options.ask('', {}); return { success: false }; },
+    } });
+    assert.equal(fallback.metrics.httpRequests, 2);
+    assert.equal(fallback.metrics.inputTokens, null);
+    assert.match(fallback.metrics.usageReasons.inputTokens, /earlier HTTP attempt usage unavailable/);
+  } finally { globalThis.fetch = originalFetch; }
+}
+
+// 13) Recompute the preserved first batch offline: its observed token totals and
+// failure consumption keep the same meaning after this accounting fix.
+{
+  const raw = JSON.parse(await readFile(new URL('./live-benchmark/raw/live-2026-10-26T08-52-43-090Z.json', import.meta.url), 'utf8'));
+  const recomputed = summarizeLive(raw.trials, { hosts: raw.hosts, expectedTrials: 12 });
+  assert.equal(recomputed.verified, 10);
+  assert.equal(recomputed.failureConsumption.inputTokens, 25218);
+  assert.equal(recomputed.failureConsumption.outputTokens, 2620);
+  assert.equal(recomputed.failureConsumption.totalLatencyMs, 6102);
+  assert.equal(recomputed.failureConsumption.engineLatencyMs, 3409);
+  assert.deepEqual(recomputed.failureConsumption.usageReasons, { inputTokens: null, outputTokens: null });
+  for (const row of recomputed.byHostTask) {
+    const prior = raw.summary.byHostTask.find((item) => item.host === row.host && item.taskId === row.taskId);
+    assert.equal(row.inputTokens, prior.inputTokens);
+    assert.equal(row.outputTokens, prior.outputTokens);
+  }
+}
+
 assert.throws(() => parseArgs(['--hosts', 'invalid']));
 assert.throws(() => parseArgs(['--rounds', '0']));
 assert.throws(() => parseArgs(['--unknown']));
 assert.equal(parseArgs([]).live, false);
 assert.equal(parseArgs(['--live', '--rounds', '3']).rounds, 3);
 
-console.log('PASS: live benchmark policy (false success, URL+DOM verifiers, logical ask vs HTTP, budgets, gate, failure consumption, SKIP vs FAIL, cleanup, sanitization)');
+console.log('PASS: live benchmark policy (false success, URL+DOM verifiers, logical ask vs HTTP, budgets, gate, unknown usage propagation, failure consumption, preserved raw recomputation, SKIP vs FAIL, cleanup, sanitization)');

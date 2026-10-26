@@ -126,7 +126,52 @@ function compactHistory(history = []) {
   }));
 }
 
-function emptyMetrics() {
+const TOKEN_FIELDS = { inputTokens: 'input_tokens', outputTokens: 'output_tokens' };
+const validTokens = (value) => Number.isSafeInteger(value) && value >= 0;
+
+// The engine initializes its usage aggregate to zero even if the backend omitted
+// usage. Only individual, settled ask receipts can establish observed token counts.
+function trialUsage(asks) {
+  const usage = {};
+  const usageReasons = {};
+  for (const [metric, field] of Object.entries(TOKEN_FIELDS)) {
+    const reasons = [];
+    let total = 0;
+    asks.forEach((ask, index) => {
+      const prefix = `ask ${index + 1}`;
+      if (!ask.settled) reasons.push(`${prefix}: request not settled at report time`);
+      else if (ask.httpAttempts > 1) reasons.push(`${prefix}: earlier HTTP attempt usage unavailable (fallback/retry)`);
+      else if (!validTokens(ask.usage?.[field])) reasons.push(`${prefix}: backend did not return valid ${field}`);
+      else total += ask.usage[field];
+    });
+    usage[field] = reasons.length ? null : total;
+    usageReasons[metric] = reasons.length ? reasons.join('; ') : null;
+  }
+  return { usage, usageReasons, usageSource: asks.length ? 'ask-receipts' : 'no-model-requests' };
+}
+
+function unknownUsage(reason, usageSource) {
+  return {
+    usage: { input_tokens: null, output_tokens: null },
+    usageReasons: { inputTokens: reason, outputTokens: reason },
+    usageSource,
+  };
+}
+
+function summarizeTokens(rows) {
+  const totals = {};
+  const usageReasons = {};
+  for (const metric of Object.keys(TOKEN_FIELDS)) {
+    const missing = rows.filter((row) => !validTokens(row.metrics?.[metric]));
+    totals[metric] = missing.length ? null : rows.reduce((sum, row) => sum + row.metrics[metric], 0);
+    usageReasons[metric] = missing.length ? missing.map((row) =>
+      `${row.trialId}: ${row.metrics?.usageReasons?.[metric] ?? 'token usage unavailable'}`
+    ).join('; ') : null;
+  }
+  return { ...totals, usageReasons };
+}
+
+function emptyMetrics(usageInfo) {
   return {
     latencyMs: 0,
     navigationMs: 0,
@@ -139,15 +184,19 @@ function emptyMetrics() {
     latePageCalls: 0,
     lateDispatchAttempts: 0,
     phases: { observeMs: 0, decideMs: 0, executeMs: 0, verifyMs: 0 },
-    inputTokens: 0,
-    outputTokens: 0,
+    inputTokens: usageInfo.usage.input_tokens,
+    outputTokens: usageInfo.usage.output_tokens,
+    usageSource: usageInfo.usageSource,
+    usageReasons: usageInfo.usageReasons,
     modelErrors: 0,
   };
 }
 
-/** A trial that could not even start: still a real FAIL, never a SKIP. */
+/** Unexpected harness failure: accounting may be unavailable; never a SKIP. */
 export function failedTrial(task, ctx, error, extra = {}) {
   const message = String(error?.message || error);
+  // An unexpected harness exception does not establish whether model work occurred.
+  const usageInfo = unknownUsage('harness error: request/usage accounting unavailable', 'unavailable');
   return {
     trialId: `${ctx.host}/${task.id}/r${ctx.round}`,
     host: ctx.host,
@@ -171,8 +220,8 @@ export function failedTrial(task, ctx, error, extra = {}) {
     falseSuccess: false,
     unsettled: false,
     execution: { ok: false, reasons: [`trial harness error: ${message}`] },
-    metrics: emptyMetrics(),
-    model: { serverModels: [], serverEndpoints: [], usage: { input_tokens: 0, output_tokens: 0 } },
+    metrics: emptyMetrics(usageInfo),
+    model: { serverModels: [], serverEndpoints: [], ...usageInfo },
     history: [],
     ...extra,
   };
@@ -223,16 +272,12 @@ export async function runTrial(page, task, ctx) {
   const modelErrors = [];
   const serverModels = new Set();
   const serverEndpoints = new Set();
-  const receiptUsage = { input_tokens: 0, output_tokens: 0 };
+  const asks = [];
   const logLines = [];
 
   const recordReceipt = (receipt) => {
     if (receipt?.model) serverModels.add(receipt.model);
     if (receipt?.endpoint) serverEndpoints.add(receipt.endpoint);
-    if (receipt?.usage) {
-      receiptUsage.input_tokens += receipt.usage.input_tokens || 0;
-      receiptUsage.output_tokens += receipt.usage.output_tokens || 0;
-    }
   };
 
   const ask = async (state, questions, options = {}) => {
@@ -247,7 +292,11 @@ export async function runTrial(page, task, ctx) {
       );
     }
     logicalAskCalls += 1;
-    const receipt = options.receipt || {};
+    const askRecord = { settled: false, usage: null, httpAttempts: 0 };
+    asks.push(askRecord);
+    // A fresh receipt prevents an earlier answer's usage from surviving a failed
+    // request when the engine reuses its receipt object within one step.
+    const receipt = {};
     const originalFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch : null;
     if (!originalFetch) httpUnmeasuredReason = 'global fetch unavailable in this host runtime';
     let localHttp = 0;
@@ -255,6 +304,7 @@ export async function runTrial(page, task, ctx) {
     if (originalFetch) {
       fetchWrapper = async (...fetchArgs) => {
         localHttp += 1;
+        askRecord.httpAttempts += 1;
         let attempt = { url: safeEndpoint(fetchArgs[0]), status: null, ok: null, error: null };
         if (httpAttempts.length < 20) httpAttempts.push(attempt);
         try {
@@ -278,6 +328,9 @@ export async function runTrial(page, task, ctx) {
       modelErrors.push({ code: err?.code ?? null, message: String(err?.message || err) });
       throw err;
     } finally {
+      askRecord.usage = receipt.usage ? { ...receipt.usage } : null;
+      askRecord.settled = true;
+      if (options.receipt) Object.assign(options.receipt, receipt, { usage: receipt.usage ?? null });
       // Only the owner of the current wrapper restores it. If an old, unsettled ask is
       // superseded, it must not clobber a newer trial's wrapper.
       if (fetchWrapper && globalThis.fetch === fetchWrapper) globalThis.fetch = originalFetch;
@@ -382,9 +435,7 @@ export async function runTrial(page, task, ctx) {
       : thrown
         ? `thrown:${thrown.code || thrown.name}`
         : result?.reason ?? (navigationError ? 'navigation_failed' : null);
-  const engineUsage = result?.usage ?? null;
-  const usage = engineUsage ?? receiptUsage;
-  const usageSource = engineUsage ? 'engine-result' : 'ask-receipts';
+  const { usage, usageSource, usageReasons } = trialUsage(asks);
 
   return {
     trialId,
@@ -436,9 +487,10 @@ export async function runTrial(page, task, ctx) {
       stepBudgetExceeded,
       settlement: engineSettled ? 'settled' : 'unsettled',
       phases: result?.phases ?? null,
-      inputTokens: usage?.input_tokens ?? null,
-      outputTokens: usage?.output_tokens ?? null,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
       usageSource,
+      usageReasons,
       modelErrors: modelErrors.length,
     },
     model: {
@@ -447,6 +499,7 @@ export async function runTrial(page, task, ctx) {
       serverEndpoints: [...serverEndpoints],
       usage: { ...usage },
       usageSource,
+      usageReasons,
       errors: modelErrors.slice(),
     },
     stopReason,
@@ -456,6 +509,7 @@ export async function runTrial(page, task, ctx) {
 }
 
 export function notRunTrial(task, ctx, reason) {
+  const usageInfo = unknownUsage('trial not run; token measurement not applicable', 'not-run');
   return {
     trialId: `${ctx.host}/${task.id}/r${ctx.round}`,
     host: ctx.host,
@@ -472,8 +526,8 @@ export function notRunTrial(task, ctx, reason) {
     execution: { ok: false, reasons: ['not_run'] },
     falseSuccess: false,
     reason,
-    metrics: emptyMetrics(),
-    model: { serverModels: [], serverEndpoints: [], usage: { input_tokens: 0, output_tokens: 0 } },
+    metrics: emptyMetrics(usageInfo),
+    model: { serverModels: [], serverEndpoints: [], ...usageInfo },
     history: [],
   };
 }
@@ -537,14 +591,7 @@ export function summarizeLive(trials = [], meta = {}) {
   const byHostTask = [];
   for (const [key, rows] of groupByHostTask(trials)) {
     const [host, taskId] = key.split('/');
-    const usage = rows.reduce(
-      (acc, row) => {
-        acc.input += row.metrics?.inputTokens || 0;
-        acc.output += row.metrics?.outputTokens || 0;
-        return acc;
-      },
-      { input: 0, output: 0 }
-    );
+    const usage = summarizeTokens(rows);
     byHostTask.push({
       host,
       taskId,
@@ -559,8 +606,7 @@ export function summarizeLive(trials = [], meta = {}) {
       httpRequests: rows.every((row) => typeof row.metrics?.httpRequests === 'number')
         ? rows.reduce((sum, row) => sum + row.metrics.httpRequests, 0)
         : null,
-      inputTokens: usage.input,
-      outputTokens: usage.output,
+      ...usage,
     });
   }
 
@@ -572,8 +618,7 @@ export function summarizeLive(trials = [], meta = {}) {
     httpRequests: failed.every((row) => typeof row.metrics?.httpRequests === 'number')
       ? failed.reduce((sum, row) => sum + row.metrics.httpRequests, 0)
       : null,
-    inputTokens: failed.reduce((sum, row) => sum + (row.metrics?.inputTokens || 0), 0),
-    outputTokens: failed.reduce((sum, row) => sum + (row.metrics?.outputTokens || 0), 0),
+    ...summarizeTokens(failed),
     costUsd: null,
     costUsdReason: 'no pricing asserted; usage is recorded but not converted to dollars',
   };
@@ -603,6 +648,7 @@ export function summarizeLive(trials = [], meta = {}) {
     unknownMetrics: {
       costUsd: 'null: no pricing asserted',
       humanTakeover: 'null: not instrumented in this batch',
+      tokens: summarizeTokens(trials).usageReasons,
       httpRequests: trials.every((row) => typeof row.metrics?.httpRequests === 'number')
         ? null
         : 'null where the host runtime exposed no global fetch',
