@@ -299,11 +299,17 @@ export async function runTrial(page, task, ctx) {
     const receipt = {};
     const originalFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch : null;
     if (!originalFetch) httpUnmeasuredReason = 'global fetch unavailable in this host runtime';
-    let localHttp = 0;
     let fetchWrapper = null;
     if (originalFetch) {
       fetchWrapper = async (...fetchArgs) => {
-        localHttp += 1;
+        // askJev may try another endpoint inside the same logical ask after a slow
+        // failure. Check at the HTTP boundary before dispatching/counting that attempt.
+        if (askClosed || gate.halted) {
+          throw stopError('live benchmark HTTP gate is closed after timeout', 'EGO_LIVE_HALTED');
+        }
+        // Count dispatch immediately: an in-flight request must remain visible even
+        // when its ask never settles before the trial report is captured.
+        httpRequests += 1;
         askRecord.httpAttempts += 1;
         let attempt = { url: safeEndpoint(fetchArgs[0]), status: null, ok: null, error: null };
         if (httpAttempts.length < 20) httpAttempts.push(attempt);
@@ -334,7 +340,6 @@ export async function runTrial(page, task, ctx) {
       // Only the owner of the current wrapper restores it. If an old, unsettled ask is
       // superseded, it must not clobber a newer trial's wrapper.
       if (fetchWrapper && globalThis.fetch === fetchWrapper) globalThis.fetch = originalFetch;
-      httpRequests += localHttp;
     }
   };
 

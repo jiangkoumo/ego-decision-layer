@@ -222,17 +222,32 @@ async function stageLiveFiles() {
     'scripts/decider-loop.mjs',
   ];
   const copied = [];
-  for (const rel of files) {
-    const dest = join(stage, rel);
-    await mkdir(dirname(dest), { recursive: true });
-    await copyFile(join(REPO, rel), dest);
-    const digest = async (path) => createHash('sha256').update(await readFile(path)).digest('hex');
-    const from = await digest(join(REPO, rel));
-    const to = await digest(dest);
-    if (from !== to) throw new Error(`staged copy differs: ${rel}`);
-    copied.push({ path: rel, sha256: from });
+  try {
+    for (const rel of files) {
+      const dest = join(stage, rel);
+      await mkdir(dirname(dest), { recursive: true });
+      await copyFile(join(REPO, rel), dest);
+      const digest = async (path) => createHash('sha256').update(await readFile(path)).digest('hex');
+      const from = await digest(join(REPO, rel));
+      const to = await digest(dest);
+      if (from !== to) throw new Error(`staged copy differs: ${rel}`);
+      copied.push({ path: rel, sha256: from });
+    }
+    return { stage, copied };
+  } catch (err) {
+    // Ownership has not reached runEgoLeg yet: this function must clean allocations
+    // even when copying, directory creation or digest verification fails midway.
+    const evidence = { stage, stageRemoved: false, errors: [] };
+    try {
+      await rm(stage, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      evidence.stageRemoved = !(await exists(stage));
+      if (!evidence.stageRemoved) evidence.errors.push('staged directory still exists after removal');
+    } catch (cleanupError) {
+      evidence.errors.push(`staged files removal failed: ${String(cleanupError?.message || cleanupError)}`);
+    }
+    err.stageCleanup = evidence;
+    throw err;
   }
-  return { stage, copied };
 }
 
 function formatTrial(trial) {
@@ -340,6 +355,11 @@ export async function runCdpLeg({ args, plan, env }) {
   } catch (err) {
     status = 'failed';
     reason = String(err?.message || err);
+    if (Array.isArray(err?.cleanupProblems) && err.cleanupProblems.length) {
+      cleanup.ok = false;
+      cleanup.targetClosed = false;
+      cleanup.errors.push(...err.cleanupProblems.map((problem) => `CDP partial connection cleanup: ${String(problem)}`));
+    }
     if (err?.cleanup) {
       cleanup.processStopped = err.cleanup.processStopped ?? cleanup.processStopped;
       cleanup.profileRemoved = err.cleanup.profileRemoved ?? cleanup.profileRemoved;
@@ -483,11 +503,23 @@ export async function runEgoLeg({ args, plan, env }) {
     };
     child.stdout?.on('data', consume);
     child.stderr?.on('data', consume);
+    let launchError = null;
+    // EventEmitter errors do not reach the outer try/catch unless they are consumed.
+    // Wait for close too, so launch failure takes the same reporting/cleanup path.
+    child.once('error', (err) => { launchError = err; });
     child.stdin.on('error', () => {});
     child.stdin.end(script);
-    const code = await new Promise((resolveCode) => child.once('close', resolveCode));
-    clearTimeout(timer);
+    let code;
+    try {
+      code = await new Promise((resolveCode) => child.once('close', resolveCode));
+    } finally {
+      clearTimeout(timer);
+    }
     cleanup.childExitCode = code;
+    if (launchError) {
+      cleanup.childLaunchError = { code: launchError.code ?? null, message: String(launchError.message || launchError) };
+      throw launchError;
+    }
     if (cleanup.childTimedOut) {
       status = 'failed';
       reason = 'ego child timed out; TaskSpace cleanup unconfirmed';
@@ -531,6 +563,11 @@ export async function runEgoLeg({ args, plan, env }) {
     reason = String(err?.message || err);
     cleanup.ok = false;
     cleanup.errors.push(reason);
+    if (err?.stageCleanup) {
+      cleanup.stageRemoved = err.stageCleanup.stageRemoved;
+      cleanup.stagePath = err.stageCleanup.stage;
+      cleanup.errors.push(...err.stageCleanup.errors);
+    }
   } finally {
     if (staged) {
       try {

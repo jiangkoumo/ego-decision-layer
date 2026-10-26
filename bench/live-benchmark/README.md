@@ -80,8 +80,11 @@ a host/setup/cleanup failed; `2` usage error, missing browser/credentials, or in
 - User tabs, user profiles, caches and existing pages are not reused. `cache: false` and
   `textModel: null` are forced for every trial.
 - A wall-clock timeout first closes a **harness gate** and the logical-ask gate. Every later
-  page/CDP call is rejected before dispatch, and no new model ask can start. If the engine
-  promise still has not settled after a bounded grace period, the trial is marked
+  page/CDP call is rejected before dispatch, and no new model ask can start.
+  HTTP fallback/retry attempts within an already-started ask are also rejected before
+  dispatch; already-dispatched in-flight requests stay counted and their unavailable
+  usage stays `null`. If the engine promise still has not settled after a bounded grace
+  period, the trial is marked
   `unsettled` and the remaining plan entries are recorded as **`NOT_RUN`**; the next trial
   is not started. Host cleanup still runs.
 
@@ -98,6 +101,22 @@ and propagates missing usage through summaries. The original raw file and its re
 script hashes remain unchanged. `node bench/test-live-benchmark.mjs` recomputes its summary
 offline and checks that the per-host/task token totals and failure consumption below are
 unchanged; no live trial was rerun for this fix.
+
+The fresh-review follow-up after `0dba5c0` closes the HTTP dispatch gate for fallback
+attempts inside an already-started ask, counts dispatched in-flight requests immediately,
+and preserves ego launch/staging failures and CDP partial-connection cleanup evidence.
+These changes affect error/timeout paths; the original 12 samples and recorded revisions
+remain untouched. No additional live trial was run. Offline coverage is available via
+`node bench/live-benchmark/fault-regressions.mjs` and is also part of
+`node bench/test-live-benchmark.mjs`.
+
+Before this follow-up, the four independent fault cases each exited 1: delayed primary
+503 dispatched a fallback after timeout (2 requests instead of 1), ego ENOENT was an
+unhandled error, stage mkdir failure left the allocated directory outside cleanup, and
+partial CDP target close `success:false` was reported with `cleanup.ok=true`. After the
+fix, all four exit 0. Tests use the real `askJev` with an in-memory fetch, isolated Node
+processes with builtin I/O substitutes, and the real CDP host with a WebSocket substitute;
+they make no network requests and launch no browser.
 
 Environment (from the raw file): macOS arm64, Node `v22.22.2`, ego-browser `0.6.0.20`,
 external Chrome `156.0.8078.48`, Jev server model `jev-1.14.0` (request alias

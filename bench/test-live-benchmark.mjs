@@ -10,6 +10,7 @@ import { getTask } from './live-benchmark/tasks.mjs';
 import { runTrial, runHostTrials, failedTrial, notRunTrial, summarizeLive } from './live-benchmark/suite.mjs';
 import { readFile } from 'node:fs/promises';
 import { parseArgs, preflightHosts, runLiveBenchmark, exitCodeFor, sanitizeText } from './live-benchmark/run.mjs';
+import { runFaultRegressions } from './live-benchmark/fault-regressions.mjs';
 
 const HN_URL = 'https://news.ycombinator.com/newcomments';
 const WIKI_URL = 'https://en.wikipedia.org/wiki/Jev';
@@ -466,5 +467,7 @@ assert.throws(() => parseArgs(['--rounds', '0']));
 assert.throws(() => parseArgs(['--unknown']));
 assert.equal(parseArgs([]).live, false);
 assert.equal(parseArgs(['--live', '--rounds', '3']).rounds, 3);
+
+assert.equal(runFaultRegressions(), 0, 'fresh-review offline fault regressions');
 
 console.log('PASS: live benchmark policy (false success, URL+DOM verifiers, logical ask vs HTTP, budgets, gate, unknown usage propagation, failure consumption, preserved raw recomputation, SKIP vs FAIL, cleanup, sanitization)');
