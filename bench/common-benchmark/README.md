@@ -1,4 +1,4 @@
-# P2 共同基准（第一批，10 项）
+# P2 共同基准（第二批，12 项）
 
 双宿主共同验收集：同一组**目标、起始页面、输入、确定性验证器与预算**，分别在 ego lite 与
 「普通 Node + 外部 Chrome（CDP）」上跑一遍，用同一份报告口径汇总。
@@ -14,21 +14,27 @@ node bench/test-common-benchmark.mjs                      # 清单/口径/预算
 ## 与 P1 套件的关系（复用，不另起一套）
 
 任务本体（fixture、注入决策、`verify` 断言）**直接引用** `bench/host-acceptance/tasks.mjs` 的
-10 项，不复制代码；本目录只加了三件 P1 没有的东西：
+12 项，不复制代码；本目录只加了三件 P1 没有的东西：
 
 1. **任务格式与预算**（`tasks.mjs`）：每项写明起始页、输入、验证器位置、步数/时间/决策请求上限；
 2. **统一 runner**（`run.mjs`）：两个宿主同一条执行路径，宿主缺失按 SKIP 记录原因；
 3. **汇总报告**（`suite.mjs`）：成功率、错误成功率、延迟、请求数、花费、护栏拒绝率、人工接管率、
    失败消耗，字段与未知值口径固定。
 
-P1 的 12 项里有 2 项（`no-text-source`、`batch-two-fields`）不在本批 10 项内：前者与
-`type-text` 共享「无文本来源」路径，后者是批处理能力验证，留到第二批补齐。
+任务集版本 `p2-controlled-v2` 新增 P1 已有的 `no-text-source` 与 `batch-two-fields`。
+前者提供候选文本，但注入判定器选 `none` 且禁用文本模型；验证 `reason=no_text_source`、
+输入值保持空串、零派发。后者验证两字段真实值、提交结果，以及一次批处理完成三个子动作。
+两项的 fixture、决策与独立 verifier 均由 P1 提供。
+
+`TASKS_V1` 保留原十项定义，历史报告仍为 `p2-controlled-v1`；默认 runner 使用 `TASKS_V2`。
+顶层与每条宿主报告的 `taskSet` 均取同一个 `VERSION`，不能把历史十项结果标成十二项验收。
 
 ## 任务格式
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` / `goal` / `expect` | 报告口径用；`expect=goal` 要求引擎 `success=true`，`expect=guard` 要求**不**成功 |
+| `expectedRejection` / `expectedRejectionKind` | 是否预期拒绝与具体种类（`covered` / `stale_ref` / `dangerous_action` / `control_stop` / `no_text_source`）；goal 任务种类为 `null` |
 | `start` | `about:blank` + 就地注入的合成 fixture（`bench/host-acceptance/tasks.mjs#<id>`） |
 | `input` | 注入判定器的确定性选择、`--text` 候选、是否启用响应校验 |
 | `verifier` | 任务自带的 `verify(page, ctx)`：动作后真实 DOM/URL/派发记录断言 |
@@ -56,17 +62,21 @@ P1 的 12 项里有 2 项（`no-text-source`、`batch-two-fields`）不在本批
 | `successRate` | 通过 / 已跑任务 |
 | `goalSuccessRate` | 只统计 `expect=goal` 的任务 |
 | `falseSuccessRate` | 引擎说成功但 DOM 断言不成立 / 已跑任务（**错误成功率**） |
-| `guardrailRejectionRate` | `expect=guard` 任务里被 guard/stale/控制停止拦下的比例 |
-| `rejectionRateAllTasks` | 同一口径放开到全部任务 |
-| `rejectionMatches` | 「是否被拦」与 `expect` 一致的**任务数**（不是比例） |
+| `guardrailRejectionRate` | 四项执行护栏任务被 guard/stale/控制停止拦下的比例，分母不含 `no-text-source`；沿用 v1 的四项口径 |
+| `expectedRejectionRate` | 五项预期拒绝任务实际出现拒绝的比例，包含缺文本来源 |
+| `rejectionRateAllTasks` | 出现任一拒绝种类的任务 / 全部已跑任务 |
+| `rejectionKinds` | 按具体种类记录任务数；`no_text_source` 独立计数，不写成 `dangerous_action` |
+| `rejectionMatches` | 实际拒绝种类与定义一致的**任务数**；goal 任务应无拒绝，guard 任务应只出现指定种类 |
 | `zeroDispatchGuardTasks` / `dispatchCountGuardTasks` | 护栏任务里 0 派发 / 已派发后才停止（`control-stop`）的数量 |
-| `postStopPageCalls` | 控制停止之后引擎仍发起的页面调用总数（必须 0） |
+| `postStopPageCalls` | 抛出停止之后引擎仍发起的页面调用总数（必须 0）；只有 `stopReason=thrown:EGO_CONTROL_LOST` 才计为控制停止拒绝，预算/超时/普通异常不计 |
 | `decisionRequests` / `dispatches` / `latencyMs` / `networkRequests` | 计数与墙钟总和 |
 | `costUsd` / `humanTakeoverRate` / `unknownMetrics` | 注入判定器下测不到，一律 `null`，不猜 0 |
 | `failureConsumption` | 失败任务数及其延迟、请求数、费用（无失败时费用记 0） |
 
 单任务还保留 P1 的 `metrics.phases`（观测/决策/执行/校验分阶段耗时）、`stopReason`、
-`guardrailRejections`、`history`（紧凑化），以及新增的 `networkRequests`、`budgetPassed`。
+`guardrailRejections`、`history`（紧凑化），以及 `networkRequests`、`budgetPassed`、`rejectionKinds`。
+拒绝匹配仅衡量种类一致性；任务通过仍必须满足独立 verifier、期望的引擎结果、三项预算与零网络请求。
+`notRun` 列出未跑任务；缺宿主为 SKIP，预算失败或清理未确认均为 FAIL。
 
 ## 宿主腿
 
@@ -80,7 +90,7 @@ P1 的 12 项里有 2 项（`no-text-source`、`batch-two-fields`）不在本批
 模块（两份 `suite.mjs` / `tasks.mjs` + `scripts/decider-loop.mjs`）拷到临时目录，**逐文件校验 sha256**
 后才 import，并把 `staged.files` 与原因写进报告。普通路径（仓库在主盘上）不需要这步，也没有被绕过。
 
-## 本机实测（2026-10-25，本 worktree）
+## 第一批历史实测（2026-10-25，`p2-controlled-v1`）
 
 | 宿主 | 结果 | 决策请求 | 派发 | 延迟总和 | 错误成功 | 护栏拒绝率 | 清理 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -92,6 +102,31 @@ P1 的 12 项里有 2 项（`no-text-source`、`batch-two-fields`）不在本批
 
 这些数字只说明**机制一致性**：合成 DOM + 注入判定器（`options.ask`），**不是**模型成功率，
 也不是线上站点成功率。延迟受机器负载影响，不构成性能基准。
+
+## 第二批实测（`p2-controlled-v2`）
+
+复跑命令：`node bench/common-benchmark/run.mjs --hosts both --out /tmp/issue14-p2-controlled-v2-final.json`。
+本次实际 exit 0，macOS arm64、Node v22.22.2；结果文件是临时本机产物，不提交到仓库。
+
+| 宿主 | 结果 | 决策请求 | 派发 | 延迟总和 | 错误成功 | 网络请求 | 清理 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| cdp（临时 headless Chrome 156.0.8078.48） | 12/12 | 15 | 27 | 232ms | 0 | 0 | 自有 target 关闭、临时 Chrome PID 61390 已退出 |
+| ego（ego lite 0.6.0.20 / Chromium 154.0.8037.44） | 12/12 | 15 | 27 | 328ms | 0 | 0 | TaskSpace 70 已 `finish({ keep: [] })` |
+
+两腿 `notRun=[]`、`rejectionMatches=12`、`expectedRejectionRate=5/5`、
+`guardrailRejectionRate=4/4`、`postStopPageCalls=0`，所有任务 `budgetPassed=true`。
+五种拒绝各出现一项；`dangerous_action` 只有危险动作任务，缺文本来源保持独立种类。
+新增两项在两个宿主上得到相同的 verifier 证据：
+
+| 任务 | 真实 DOM / 执行证据 | 请求与步数 |
+| --- | --- | --- |
+| `no-text-source` | `value=""`、`stopReason=no_text_source`、`dispatches=0` | 1 次决策、1 步 |
+| `batch-two-fields` | `username=alice`、`email=alice@example.com`、`submitted="alice / alice@example.com"`、`out="Submitted: alice / alice@example.com"`、`batchExecutedCount=3/3` | 1 次决策、1 步、10 次底层派发事件 |
+
+离线策略回归 `node bench/test-common-benchmark.mjs` 覆盖缺文本来源的拒绝种类、普通异常不算控制停止、
+批处理决策复用与独立 verifier 拒绝错误成功、请求/步数/时间/网络预算、超时 `notRun`、
+fetch 恢复、缺宿主 SKIP、启动失败及清理未确认时不能通过。策略测试里的 page 替身不算浏览器行为证据。
+本节真实浏览器数字仍只说明合成受控 DOM 的机制一致性，单轮延迟不是性能基准。
 
 ## 真实站点候选（本轮只登记，不跑）
 

@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectCdpHost } from '../../scripts/hosts/cdp-host.mjs';
 import { runCommonBenchmark } from './suite.mjs';
+import { VERSION } from './tasks.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -24,6 +25,14 @@ export function parseArgs(argv) {
   }
   if (!['both', 'ego', 'cdp'].includes(args.hosts)) throw new Error('hosts must be both, ego or cdp');
   return args;
+}
+
+// A complete task report is necessary, but owned-resource cleanup must also be confirmed.
+export function hostStatus(report, cleanup) {
+  const cleaned = cleanup?.taskSpaceFinished === true ||
+    (cleanup?.target?.targetClosed === true && (!cleanup.pid || cleanup.processStopped === true));
+  return report?.summary.complete === true && report.summary.failed === 0 &&
+    report.notRun?.length === 0 && cleaned && !cleanup.error ? 'passed' : 'failed';
 }
 
 async function stopChild(child) {
@@ -93,7 +102,7 @@ async function cdpLeg(args) {
     if (temp && (!child?.pid || cleanup.processStopped)) await rm(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     if (cleanup.error) outcome = { ...outcome, status: 'failed' };
   }
-  return { ...outcome, cleanup };
+  return { ...outcome, ...(outcome.report ? { status: hostStatus(outcome.report, cleanup) } : {}), cleanup };
 }
 
 async function stageFiles() {
@@ -128,10 +137,11 @@ async function egoLeg(args) {
   const script = `const fs=await import('node:fs/promises');
 const {runCommonBenchmark}=await import(${JSON.stringify(entry)});
 const space=await taskSpace('ego-p2-common-'+Date.now());
-let result;
-try {result=await runCommonBenchmark(space.page('p1'),{host:'ego'});}
-finally {await space.finish({keep:[]});}
-await fs.writeFile(${JSON.stringify(resultFile)},JSON.stringify(result));
+let report;
+const cleanup={spaceId:space.spaceId,taskSpaceFinished:false};
+try {report=await runCommonBenchmark(space.page('p1'),{host:'ego'});}
+finally {await space.finish({keep:[]});cleanup.taskSpaceFinished=true;}
+await fs.writeFile(${JSON.stringify(resultFile)},JSON.stringify({report,cleanup}));
 console.log('P2_RESULT_WRITTEN');`;
   const child = spawn(executable, ['nodejs'], { cwd: repo, stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '', stderr = '', combined = '', launchError, timedOut = false;
@@ -150,11 +160,11 @@ console.log('P2_RESULT_WRITTEN');`;
     const line = combined.split('\n').find(l => l.includes('P2_RESULT_WRITTEN'));
     if (timedOut || launchError || !line || code !== 0) return { host: 'ego', status: 'failed', staged,
       reason: timedOut ? 'Ego process timeout; TaskSpace cleanup unconfirmed' : launchError?.message ?? `No complete result (exit ${code}): ${stderr || combined.slice(-2000)}` };
-    let report;
-    try { report = JSON.parse(await readFile(resultFile, 'utf8')); }
+    let report, cleanup;
+    try { ({ report, cleanup } = JSON.parse(await readFile(resultFile, 'utf8'))); }
     catch (err) { return { host: 'ego', status: 'failed', staged, reason: `Unreadable result file: ${err.message}` }; }
-    return { host: 'ego', status: report.summary.complete && report.summary.failed === 0 ? 'passed' : 'failed', report, staged,
-      cleanup: { taskSpaceFinished: true } };
+    return { host: 'ego', status: hostStatus(report, cleanup),
+      report, staged, cleanup };
   } finally { await rm(stage.stage, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 }
 
@@ -165,7 +175,7 @@ export async function run(args) {
     if (args.hosts !== 'both' && args.hosts !== host) continue;
     hosts.push(await (host === 'cdp' ? cdpLeg(args) : egoLeg(args)));
   }
-  return { schemaVersion: 1, taskSet: 'p2-controlled-v1', generatedAt: new Date().toISOString(),
+  return { schemaVersion: 1, taskSet: VERSION, generatedAt: new Date().toISOString(),
     runtime: { node: process.version, platform: process.platform, arch: process.arch },
     hosts, complete: hosts.every(h => h.status === 'passed'),
     status: hosts.some(h => h.status === 'failed') ? 'failed' : hosts.some(h => h.status === 'skipped') ? 'incomplete' : 'passed' };

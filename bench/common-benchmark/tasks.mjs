@@ -1,11 +1,12 @@
-// P2 batch 1: references to the P1 fixtures, decisions and independent verifiers.
+// Versioned P2 manifests: reference P1 fixtures, decisions and independent verifiers.
 import { TASKS } from '../host-acceptance/tasks.mjs';
 
-export const VERSION = 'p2-controlled-v1';
+export const VERSION_V1 = 'p2-controlled-v1';
+export const VERSION = 'p2-controlled-v2';
 const ids = ['click-button', 'click-link-nav', 'type-text', 'search-submit',
   'select-native', 'checkbox-toggle', 'covered-target', 'stale-ref',
   'danger-action', 'control-stop'];
-export const TASKS_V1 = ids.map(id => {
+function defineTask(id) {
   const task = TASKS.find(t => t.id === id);
   if (!task) throw new Error(`Missing acceptance task: ${id}`);
   return {
@@ -17,6 +18,20 @@ export const TASKS_V1 = ids.map(id => {
     verifier: `bench/host-acceptance/tasks.mjs#${id}.verify`,
     budget: { steps: task.maxSteps, timeMs: 10000, decisionRequests: task.maxSteps },
     conditions: { login: 'not-applicable', captcha: 'not-applicable', region: 'not-applicable', siteChange: 'not-applicable' },
+  };
+}
+export const TASKS_V1 = ids.map(defineTask);
+
+// Preserve the first batch's ten definitions for historical reports.
+const rejectionKinds = {
+  'covered-target': 'covered', 'stale-ref': 'stale_ref',
+  'danger-action': 'dangerous_action', 'control-stop': 'control_stop',
+  'no-text-source': 'no_text_source',
+};
+export const TASKS_V2 = [...ids, 'no-text-source', 'batch-two-fields'].map(id => {
+  return {
+    ...defineTask(id),
+    expectedRejectionKind: rejectionKinds[id] ?? null,
   };
 });
 
