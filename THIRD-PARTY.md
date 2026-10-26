@@ -51,3 +51,13 @@ SOFTWARE.
 - **来源**：https://github.com/citrolabs/ego-lite （MIT）
 - **性质**：本项目的**运行基础**（通过 `ego-browser` 驱动），**未再分发**其任何代码或文档。
   根目录的 `SKILL.md` 是本项目自己撰写的附加技能，装在应用包之外。
+
+---
+
+## @modelcontextprotocol/sdk（可选 MCP 入口的运行时依赖）
+
+- **来源**：npm `@modelcontextprotocol/sdk`，固定版本 **1.32.2**（`mcp/package.json`、`mcp/package-lock.json`）
+- **许可**：MIT
+- **涉及范围**：仅 `mcp/` 目录导入（stdio server/client 传输）；**未复制或修改其源码**，也不进入核心引擎、
+  CLI 与安装脚本的运行依赖。不装 `mcp/node_modules` 时仓库其余部分行为不变。
+- **性质**：v1.x 维护线，实现到 2025-11-25 的 MCP 规范。

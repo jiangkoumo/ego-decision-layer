@@ -17,3 +17,6 @@ __pycache__/
 # 单元测试的输出：每跑一次就新建一个带时间戳的文件，属可再生产物，不入仓库。
 # 注：**此前已提交的 test-* 仍在版本控制里**（报告引用它们当证据），gitignore 不影响已跟踪文件。
 bench/raw/test-*
+
+# 共同基准的本机结果（每次运行重写，属可再生产物；报告里只引用摘要）
+bench/common-benchmark/RESULTS.local.json
