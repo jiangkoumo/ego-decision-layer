@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { getTask } from './live-benchmark/tasks.mjs';
 import { runTrial, runHostTrials, failedTrial, notRunTrial, summarizeLive } from './live-benchmark/suite.mjs';
 import { readFile } from 'node:fs/promises';
-import { parseArgs, preflightHosts, runLiveBenchmark, exitCodeFor, sanitizeText } from './live-benchmark/run.mjs';
+import { parseArgs, preflightHosts, runLiveBenchmark, exitCodeFor, sanitizeText, resolveTaskSet } from './live-benchmark/run.mjs';
 import { runFaultRegressions } from './live-benchmark/fault-regressions.mjs';
 
 const HN_URL = 'https://news.ycombinator.com/newcomments';
@@ -291,6 +291,7 @@ const hnEmptyDom = { ...hnOkDom, hnMain: true, commentTree: false, commentRows: 
     runnerInfo: { node: 'test' },
   });
   assert.equal(passed.status, 'passed');
+  assert.equal(passed.suiteVersion, resolveTaskSet(args.tasks).version);
   assert.equal(exitCodeFor(passed), 0);
   const text = sanitizeText(`Authorization: Bearer secret-token TYPESAFE_API_KEY=secret-value ${process.cwd()}`);
   assert.ok(!text.includes('secret-token'));
