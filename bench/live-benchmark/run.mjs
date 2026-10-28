@@ -12,7 +12,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as engine from '../../scripts/decider-loop.mjs';
-import { selectTasks, VERSION as TASK_VERSION } from './tasks.mjs';
+import * as taskModule from './tasks.mjs';
 import { runHostTrials, summarizeLive } from './suite.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -22,12 +22,20 @@ const DEFAULT_CHROME = process.platform === 'darwin'
   ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
   : null;
 
+// C's manifest provides version and tasks together. The existing manifest remains
+// independently runnable until that interface is integrated.
+export function resolveTaskSet(spec = 'all') {
+  return typeof taskModule.resolveTaskSet === 'function'
+    ? taskModule.resolveTaskSet(spec)
+    : { version: taskModule.VERSION, tasks: taskModule.selectTasks(spec) };
+}
+
 const USAGE = `Usage: node bench/live-benchmark/run.mjs --live [options]
 
 Explicit live run (network + Jev credentials + browser required):
   --live                     required; without it the runner refuses to start
   --hosts both|ego|cdp       default both, executed in the order cdp then ego
-  --tasks all|id[,id]        default all (hn-navigation, wiki-search)
+  --tasks all|id[,id]        default all (${resolveTaskSet().tasks.map((task) => task.id).join(', ')}); named sets follow the task manifest
   --rounds N                 default 3; fixed at 3 for the first measured batch
   --out FILE                 raw JSON path; default bench/live-benchmark/raw/live-<stamp>.json
   --chrome PATH              Chrome executable (default macOS Chrome or EGO_CDP_CHROME)
@@ -61,7 +69,7 @@ export function parseArgs(argv) {
   if (!Number.isInteger(rounds) || rounds < 1 || rounds > 50) throw new Error('rounds must be an integer from 1 to 50');
   args.rounds = rounds;
   // Validate task ids early; this does not touch the network.
-  selectTasks(args.tasks);
+  resolveTaskSet(args.tasks);
   if (args.endpoint) {
     try {
       new URL(args.endpoint);
@@ -217,6 +225,7 @@ async function stageLiveFiles() {
   const stage = await mkdtemp(join(tmpdir(), 'ego-p2-live-stage-'));
   const files = [
     'bench/live-benchmark/suite.mjs',
+    'bench/live-benchmark/diagnostics.mjs',
     'bench/live-benchmark/tasks.mjs',
     'bench/live-benchmark/verifiers.mjs',
     'scripts/decider-loop.mjs',
@@ -314,7 +323,7 @@ async function launchChrome(chromePath) {
   }
 }
 
-export async function runCdpLeg({ args, plan, env }) {
+export async function runCdpLeg({ args, plan, env, taskVersion }) {
   const cleanup = {
     ok: true,
     ownedBrowser: !args.endpoint,
@@ -416,7 +425,7 @@ async function engineConnect(endpoint) {
   return connectCdpHost({ endpoint, timeoutMs: 15000, commandTimeoutMs: 20000 });
 }
 
-export async function runEgoLeg({ args, plan, env }) {
+export async function runEgoLeg({ args, plan, env, taskVersion }) {
   let staged = null;
   const cleanup = {
     ok: true,
@@ -433,6 +442,7 @@ export async function runEgoLeg({ args, plan, env }) {
   let trials = [];
   let notRun = [];
   let report = null;
+  const resolvedVersion = taskVersion ?? resolveTaskSet(args?.tasks).version;
   try {
     staged = await stageLiveFiles();
     const resultFile = join(staged.stage, 'result.json');
@@ -444,6 +454,7 @@ export async function runEgoLeg({ args, plan, env }) {
       `const suite = await import(${JSON.stringify(suiteUrl)});`,
       `const engine = await import(${JSON.stringify(engineUrl)});`,
       `const plan = ${JSON.stringify(plan)};`,
+      `const taskVersion = ${JSON.stringify(resolvedVersion)};`,
       `const spaceName = ${JSON.stringify(spaceName)};`,
       'let space = null;',
       'const cleanup = { ok: true, taskSpaceFinished: false, pagesBeforeFinish: [], errors: [] };',
@@ -468,7 +479,7 @@ export async function runEgoLeg({ args, plan, env }) {
       '    catch (err) { cleanup.ok = false; cleanup.errors.push("finish: " + String(err?.message || err)); }',
       '  } else { cleanup.ok = false; cleanup.errors.push("taskSpace was not created"); }',
       '}',
-      `await fs.writeFile(${JSON.stringify(resultFile)}, JSON.stringify({ report, cleanup }));`,
+      `await fs.writeFile(${JSON.stringify(resultFile)}, JSON.stringify({ report, cleanup, suiteVersion: taskVersion }));`,
       'console.log("LIVE_RESULT_WRITTEN");',
     ].join('\n');
 
@@ -615,6 +626,7 @@ async function computeRunnerInfo() {
   const files = [
     'bench/live-benchmark/run.mjs',
     'bench/live-benchmark/suite.mjs',
+    'bench/live-benchmark/diagnostics.mjs',
     'bench/live-benchmark/tasks.mjs',
     'bench/live-benchmark/verifiers.mjs',
     'scripts/decider-loop.mjs',
@@ -631,9 +643,9 @@ async function computeRunnerInfo() {
 export async function runLiveBenchmark(args, deps = {}) {
   if (!args?.live) throw new Error('live benchmark requires explicit --live');
   const hosts = selectHosts(args.hosts);
-  const tasks = selectTasks(args.tasks);
+  const { version: taskVersion, tasks } = (deps.resolveTaskSet ?? resolveTaskSet)(args.tasks);
   const plan = hosts.flatMap((host) =>
-    tasks.flatMap((task) => Array.from({ length: args.rounds }, (_, index) => ({ host, taskId: task.id, round: index + 1 })))
+    tasks.flatMap((task) => Array.from({ length: args.rounds }, (_, index) => ({ host, taskId: task.id, task, round: index + 1 })))
   );
   const env = await (deps.resolveEnv ?? resolveEnvironment)(args);
   const readiness = preflightHosts({
@@ -665,7 +677,7 @@ export async function runLiveBenchmark(args, deps = {}) {
     const hostPlan = plan.filter((item) => item.host === host);
     let outcome;
     try {
-      outcome = normalizeOutcome(await runner(host, { args, plan: hostPlan, env, engine }), host, hostPlan);
+      outcome = normalizeOutcome(await runner(host, { args, plan: hostPlan, env, engine, taskVersion }), host, hostPlan);
     } catch (err) {
       outcome = normalizeOutcome({
         status: 'failed',
@@ -691,7 +703,7 @@ export async function runLiveBenchmark(args, deps = {}) {
   const runnerInfo = deps.runnerInfo ?? (await computeRunnerInfo());
   const report = {
     schemaVersion: 1,
-    suiteVersion: TASK_VERSION,
+    suiteVersion: taskVersion,
     generatedAt,
     status,
     complete: summary.complete,

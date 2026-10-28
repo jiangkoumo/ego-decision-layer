@@ -1,4 +1,4 @@
-// Independent final-state verifiers for the two live tasks.
+// Independent final-state verifiers: historical v1 wrappers and explicit v2 tasks.
 //
 // These intentionally do not read the engine result. They wait (bounded) for the page,
 // then check the exact origin/path plus task-specific DOM markers. A URL match alone is
@@ -66,6 +66,12 @@ function hnDomProbe() {
     hnMain: Boolean(document.querySelector('#hnmain')),
     commentTree: Boolean(document.querySelector('.comment-tree')),
     commentRows: document.querySelectorAll('.comment-tree tr.athing, tr.comtr, .comment').length,
+    commentBodies: [...document.querySelectorAll('.comment')].filter((node) => String(node.textContent || '').trim()).length,
+    storyRows: document.querySelectorAll('tr.athing').length,
+    storyTitles: [...document.querySelectorAll('.titleline > a[href]')].filter((node) => String(node.textContent || '').trim()).length,
+    selectedPaths: [...document.querySelectorAll('.pagetop .topsel a[href]')].map((a) => {
+      try { return new URL(a.getAttribute('href'), location.href).pathname; } catch { return null; }
+    }),
     itemLinks: links.filter((href) => /^item\?id=\d+/.test(href)).length,
     passwordInput: Boolean(document.querySelector('input[type="password"]')),
     captchaMarker: Boolean(document.querySelector('iframe[src*="captcha"], .g-recaptcha, [id*="captcha"], [class*="captcha"]')),
@@ -160,9 +166,51 @@ export async function verifyWikipediaJevArticle(page) {
   };
 }
 
+function exactFinalUrl(final, expected) {
+  const url = parsedUrl(final.url);
+  const dom = final.dom || {};
+  return Boolean(expected && url && url.origin === expected.origin &&
+    url.pathname === expected.pathname && url.search === expected.search &&
+    dom.origin === expected.origin && dom.pathname === expected.pathname && dom.search === expected.search);
+}
+
+export async function verifyHackerNewsPage(page, task) {
+  const final = await readFinalPage(page, hnDomProbe);
+  const dom = final.dom || {};
+  const expected = task?.expected;
+  const urlOk = exactFinalUrl(final, expected);
+  const selected = Array.isArray(dom.selectedPaths) && dom.selectedPaths.includes(expected?.pathname);
+  const contentOk = expected?.domKind === 'comments'
+    ? (dom.commentRows || 0) > 0 && (dom.commentBodies || 0) > 0
+    : expected?.domKind === 'stories' && (dom.storyRows || 0) > 0 && (dom.storyTitles || 0) > 0;
+  const domOk = dom.hnMain === true && selected && contentOk;
+  return {
+    ok: Boolean(urlOk && domOk),
+    detail: `HN exact URL/query=${urlOk}; active navigation and ${expected?.domKind ?? 'unknown'} content=${Boolean(domOk)}`,
+    observed: { url: final.url, title: final.title, ...dom, loadError: final.loadError, conditionSignals: conditionSignals(dom) },
+  };
+}
+
+export async function verifyWikipediaArticle(page, task) {
+  const final = await readFinalPage(page, wikiDomProbe);
+  const dom = final.dom || {};
+  const expected = task?.expected;
+  const urlOk = exactFinalUrl(final, expected);
+  // Deliberately exact English article title: translation is recorded as a failure.
+  const headingOk = typeof expected?.heading === 'string' && dom.heading === expected.heading;
+  const contentOk = dom.content === true && (dom.paragraphCount || 0) > 0 && String(dom.textSample || '').trim().length > 0;
+  return {
+    ok: Boolean(urlOk && headingOk && contentOk),
+    detail: `Wiki exact URL/query=${urlOk}; exact heading=${headingOk}; article paragraphs=${contentOk}`,
+    observed: { url: final.url, title: final.title, ...dom, loadError: final.loadError, conditionSignals: conditionSignals(dom) },
+  };
+}
+
 export const VERIFIERS = {
   hackerNewsNewComments: verifyHackerNews,
   wikipediaJevArticle: verifyWikipediaJevArticle,
+  hackerNewsPage: verifyHackerNewsPage,
+  wikipediaArticle: verifyWikipediaArticle,
 };
 
 export function getVerifier(name) {

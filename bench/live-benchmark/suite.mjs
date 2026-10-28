@@ -7,6 +7,7 @@
 
 import { getTask } from './tasks.mjs';
 import { getVerifier } from './verifiers.mjs';
+import { createDiagnostics, diagnosticAttempt, measureBrowserCall } from './diagnostics.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -53,7 +54,7 @@ function safeEndpoint(value) {
  * later page/CDP call throws before reaching the real host. Promise.race alone would leave
  * the engine free to keep dispatching actions after the trial was declared over.
  */
-export function instrumentPage(page, gate = { halted: false, lateCalls: 0, lateDispatchAttempts: 0 }) {
+export function instrumentPage(page, gate = { halted: false, lateCalls: 0, lateDispatchAttempts: 0 }, diagnostics = null, scope = 'engine') {
   const dispatches = [];
   const real = page;
   const haltError = () => stopError('live benchmark gate is closed after timeout', 'EGO_LIVE_HALTED');
@@ -75,7 +76,7 @@ export function instrumentPage(page, gate = { halted: false, lateCalls: 0, lateD
       if (prop === 'cdp') {
         return async (method, params, opts) => {
           checkOpen(method);
-          const result = await target.cdp(method, params, opts);
+          const result = await measureBrowserCall(diagnostics, `cdp.${method}`, scope, () => target.cdp(method, params, opts));
           noteDispatch(method, params);
           return result;
         };
@@ -88,7 +89,7 @@ export function instrumentPage(page, gate = { halted: false, lateCalls: 0, lateD
             if (typeof value !== 'function') return value;
             return async (...args) => {
               checkOpen(`keyboard.${String(kbProp)}`);
-              const result = await value.apply(kbTarget, args);
+              const result = await measureBrowserCall(diagnostics, `keyboard.${String(kbProp)}`, scope, () => value.apply(kbTarget, args));
               dispatches.push(`keyboard.${String(kbProp)}`);
               return result;
             };
@@ -99,7 +100,7 @@ export function instrumentPage(page, gate = { halted: false, lateCalls: 0, lateD
       if (typeof value !== 'function') return value;
       return async (...args) => {
         checkOpen(String(prop));
-        const result = await value.apply(target, args);
+        const result = await measureBrowserCall(diagnostics, `page.${String(prop)}`, scope, () => value.apply(target, args));
         if (['click', 'fill', 'press', 'selectOption'].includes(prop)) dispatches.push(`page.${String(prop)}`);
         return result;
       };
@@ -241,14 +242,19 @@ export async function runTrial(page, task, ctx) {
   const startedAt = new Date(started).toISOString();
   const trialId = `${ctx.host}/${task.id}/r${ctx.round}`;
   const gate = { halted: false, lateCalls: 0, lateDispatchAttempts: 0 };
-  const inst = instrumentPage(page, gate);
+  const diagnostics = createDiagnostics();
+  const inst = instrumentPage(page, gate, diagnostics);
+  // Navigation and independent verification are measured outside the engine gate;
+  // they keep their original ordering, arguments and timeout behavior.
+  const navigationPage = instrumentPage(page, undefined, diagnostics, 'navigation').page;
+  const verifierPage = instrumentPage(page, undefined, diagnostics, 'verifier').page;
 
   let navigationError = null;
   const navStarted = Date.now();
   try {
-    await page.goto(task.startUrl, { timeout: 15000 });
+    await navigationPage.goto(task.startUrl, { timeout: 15000 });
     try {
-      await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+      await navigationPage.waitForLoadState('domcontentloaded', { timeout: 10000 });
     } catch (err) {
       // A slow load state is not fatal: the engine observes the live DOM itself.
     }
@@ -325,11 +331,14 @@ export async function runTrial(page, task, ctx) {
       };
       globalThis.fetch = fetchWrapper;
     }
+    const diagnosticAsk = diagnosticAttempt(() => diagnostics.beginAsk(state, questions));
     try {
       const answers = await ctx.engine.askJev(state, questions, { ...options, receipt });
+      diagnosticAttempt(() => diagnostics.endAsk(diagnosticAsk, answers, 'fulfilled'));
       recordReceipt(receipt);
       return answers;
     } catch (err) {
+      diagnosticAttempt(() => diagnostics.endAsk(diagnosticAsk, null, 'rejected'));
       recordReceipt(receipt);
       modelErrors.push({ code: err?.code ?? null, message: String(err?.message || err) });
       throw err;
@@ -409,7 +418,7 @@ export async function runTrial(page, task, ctx) {
   const verifyStarted = Date.now();
   let verification;
   try {
-    verification = await withTimeout(Promise.resolve(verifier(page)), 10000, 'verifier');
+    verification = await withTimeout(Promise.resolve(verifier(verifierPage, task)), 10000, 'verifier');
   } catch (err) {
     verification = { ok: false, detail: `verifier error: ${String(err?.message || err)}`, observed: { error: String(err?.message || err) } };
   }
@@ -508,6 +517,7 @@ export async function runTrial(page, task, ctx) {
       errors: modelErrors.slice(),
     },
     stopReason,
+    diagnostics: diagnosticAttempt(() => diagnostics.snapshot()),
     history: compactHistory(result?.history),
     engineLog: logLines,
   };
@@ -545,7 +555,9 @@ export async function runHostTrials({ host, page, engine, plan, onTrial }) {
   const notRun = [];
   let halted = false;
   for (const item of plan) {
-    const task = getTask(item.taskId);
+    // Keep the resolved manifest definition, including stricter definitions for
+    // existing IDs in a named set. ID-only plans still use the original default or version.
+    const task = item.task ?? getTask(item.taskId, item.version ?? item.taskVersion);
     if (!task) throw new Error(`unknown task in plan: ${item.taskId}`);
     if (halted) {
       notRun.push(notRunTrial(task, { host, round: item.round }, 'previous trial engine did not settle; next trial not started'));

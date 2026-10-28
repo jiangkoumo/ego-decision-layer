@@ -6,7 +6,7 @@ English · [简体中文](README.md)
 
 A pluggable decision layer for ego lite browser automation. By default, TypeSafe's System One model **Jev** reads an indexed element table and selects an operation and its target in one request. Code handles observation, execution, guards and completion checks. OpenAI-compatible decision backends are also supported.
 
-**Latest release: v0.12.0.** This release expands the controlled benchmark to 12 tasks, adds an initial real Jev two-host benchmark for HN and Wikipedia, and covers timeout, launch and resource-cleanup failures with offline regressions. It retains the external Chrome CDP entry, experimental MCP tools, `update` / `--version` and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
+**Latest release: v0.13.0.** This release expands the real Jev two-host benchmark to eight tasks (adding Hacker News sub-lists and additional Wikipedia search targets), introduces passive bounded diagnostics and offline timing analysis, and fixes reveal-quota oscillations and volatile text bypassing. It retains the external Chrome CDP entry, experimental MCP tools, `update` / `--version` and Windows path fixes. Download source from the [release page](https://github.com/jiangkoumo/ego-decision-layer/releases/latest).
 
 ## Requirements and installation
 
@@ -146,7 +146,7 @@ The [Chinese guide](README.md) lists browser integration tests and additional re
 
 ## Next steps
 
-The [roadmap](ROADMAP.md) records the Host Adapter, external Chrome CDP entry, first shared controlled task suite and minimal MCP entry delivered in v0.11.0. Version 0.12.0 delivers the second benchmark batch: 12 controlled tasks and an initial real Jev two-host measurement. See the [live benchmark guide](bench/live-benchmark/README.md) for its fixed command, raw results and small-sample limits. Image grounding, additional decision backends and bounded escalation to a larger model require separate validation. ego lite remains a first-class host.
+The [roadmap](ROADMAP.md) records the Host Adapter, external Chrome CDP entry, first shared controlled task suite and minimal MCP entry delivered in v0.11.0, and the second controlled benchmark batch in v0.12.0. Version 0.13.0 delivers the 8-task real Jev live benchmark, passive diagnostics, and bounded scroll/reveal loop recoveries. See the [live benchmark guide](bench/live-benchmark/README.md) for its fixed command, raw results and small-sample limits. Image grounding, additional decision backends and bounded escalation to a larger model require separate validation. ego lite remains a first-class host.
 
 ## Attribution and license
 
