@@ -1123,7 +1123,7 @@ function selectInPage(payload) {
 function scrollInPage(delta) {
   const before = scrollY;
   window.scrollBy({ top: delta, behavior: "instant" });
-  return { moved: scrollY !== before, y: scrollY };
+  return { moved: scrollY !== before, from: before, to: scrollY, y: scrollY };
 }
 
 /**
@@ -1959,6 +1959,19 @@ export function extractTargetSignature(target) {
   return { role:target.role ?? null, kind:target.kind ?? null, name:target.name ?? null,
     url:target.url ?? null, frameOrigin:target.frameOrigin === true };
 }
+export function normalizeVolatileText(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/g, "<TIMESTAMP>")
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:\s*[AaPp][Mm])?\b/g, "<TIME>")
+    .replace(/\b(?:clock|timer|timestamp|tick)[-_:\s]*\d+\b/gi, "<TIMER>")
+    .replace(/\b\d+\s*(?:ms|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?|mo|months?|y|years?)\s*(?:ago|left|remaining)?\b/gi, "<REL_TIME>")
+    .replace(/\b(?:just now|moments ago)\b/gi, "<REL_TIME>")
+    .replace(/\d+\s*(?:毫秒|秒|秒钟|分|分钟|小时|天|周|月|年)\s*(?:前|后|左右)/g, "<REL_TIME>")
+    .replace(/(?:刚刚|刚才|刚刚更新)/g, "<REL_TIME>")
+    .replace(/(?:倒计时|剩余时间|剩余)\s*[:：]?\s*\d+\s*(?:毫秒|秒|秒钟|分|分钟|小时|s|sec|seconds?)?/gi, "<COUNTDOWN>");
+}
+
 export function computeDomFingerprint(snapshot = [], options = {}) {
   const targets = typeof snapshot === "string" ? parseActionTargets(snapshot) : snapshot;
   return createHash("sha256").update(JSON.stringify(["action-cache-v2", options.url || "",
@@ -2536,10 +2549,20 @@ export async function runJevStep(page, goal, options = {}) {
     if (targets.length) elementTable = buildActionMenu(targets);
   }
   phases.observeMs = Date.now() - observeStarted;
+  if (urlBefore === null) {
+    urlBefore = await page.url();
+    bump(metrics, "page.url");
+  }
+  const normalizedTargets = (targets || []).map((t) => {
+    if (!t?.name) return t;
+    const norm = normalizeVolatileText(t.name);
+    return norm === t.name ? t : { ...t, name: norm };
+  });
+  const normalizedText = normalizeVolatileText(pageText);
   // Observation identity excludes task history and ref numbering. Scroll position is
   // tracked separately by the loop: moving back to old content is not new evidence.
   const observationFingerprint = createHash("sha256").update(JSON.stringify([
-    computeDomFingerprint(targets || [], { url: stableUrl(urlBefore || "") }), pageText,
+    computeDomFingerprint(normalizedTargets, { url: stableUrl(urlBefore || "") }), normalizedText,
   ])).digest("hex");
 
   if (!targets || !targets.length) {
@@ -2572,6 +2595,18 @@ export async function runJevStep(page, goal, options = {}) {
           phaseReport,
           useCache: options.cache !== false,
         });
+      }
+    }
+
+    if (!scrollInfo && page.evaluate) {
+      try {
+        bump(metrics, "page.evaluate");
+        const y = await page.evaluate(readScrollY);
+        if (typeof y === "number" && Number.isFinite(y)) {
+          scrollInfo = { y, canScrollDown: true, canScrollUp: y > 0, viewportH: 600 };
+        }
+      } catch (err) {
+        rethrowBrowserStop(err);
       }
     }
 
@@ -3183,6 +3218,13 @@ export async function runJevStep(page, goal, options = {}) {
               });
               bump(metrics, "page.cdp");
             }
+            if (!scrollInfo && scrolled) {
+              scrollInfo = {
+                y: scrolled.from ?? scrolled.y ?? 0,
+                canScrollDown: true,
+                canScrollUp: true,
+              };
+            }
           } else if (subAct === "wait") {
             await sleep(options.subActionWaitMs ?? 50);
           }
@@ -3281,6 +3323,13 @@ export async function runJevStep(page, goal, options = {}) {
       } else {
         scrollMoved = scrolled?.moved === true;
       }
+      if (!scrollInfo && scrolled) {
+        scrollInfo = {
+          y: scrolled.from ?? scrolled.y ?? 0,
+          canScrollDown: true,
+          canScrollUp: true,
+        };
+      }
       executed = action;
     } else if (action === "wait") {
       executed = "wait";
@@ -3313,6 +3362,17 @@ export async function runJevStep(page, goal, options = {}) {
   const needsTarget =
     action === "click" || action === "select" || action === "type_text" || action === "type_text_submit";
   const targetMissing = Boolean(needsTarget && !executed && !error && !textError && !guardRejected && !optionStale);
+  if (targetMissing && !scrollInfo && page.evaluate) {
+    try {
+      bump(metrics, "page.evaluate");
+      const y = await page.evaluate(readScrollY);
+      if (typeof y === "number" && Number.isFinite(y)) {
+        scrollInfo = { y, canScrollDown: true, canScrollUp: y > 0, viewportH: 600 };
+      }
+    } catch (err) {
+      rethrowBrowserStop(err);
+    }
+  }
 
   const targetLabel = action === "batch"
     ? (batchSubActions || []).map((s) => `${s.action} ${s.target || ""}`).join(", ")
@@ -3645,21 +3705,28 @@ export async function runJevAutonomousLoop(page, goal, options = {}) {
     if (observed) seenObservations.add(observed);
     // An automatic reveal spends this budget; its own new observation cannot
     // refill it. Waits, rejected actions and scroll movement alone cannot either.
+    // Reveal quota is ONLY restored by verified action progress on the task.
     const verifiedActionProgress = result.progressed && !unreachable && !isScroll &&
       result.action !== "wait" && !result.guardRejected && !result.staleTarget && !result.error && !result.textError;
-    if (verifiedActionProgress || (newObservation && !revealForStep)) {
+    if (verifiedActionProgress) {
       revealAttempts = 0;
       revealExhausted = false;
+      scrollDecisions.clear();
+    } else if (newObservation && !revealForStep) {
+      // Genuine new observation at this position (e.g. dynamic feed update) clears
+      // scroll decision history so new content is not falsely flagged as stuck,
+      // but DOES NOT restore reveal quota.
       scrollDecisions.clear();
     }
     // Repeated decisions at an old content/position pair reveal an oscillation,
     // even if each individual wheel movement succeeded. Adjacent identical
     // decisions retain the existing sameActionStreak boundary below.
-    if ((unreachable || isScroll) && observed && Number.isFinite(result.scrollInfo?.y)) {
-      const key = JSON.stringify([observed, result.scrollInfo.y, result.action]);
+    if ((unreachable || isScroll) && observed) {
+      const pos = Number.isFinite(result.scrollInfo?.y) ? result.scrollInfo.y : "no_pos";
+      const key = JSON.stringify([observed, pos, result.action]);
       const visits = (scrollDecisions.get(key) || 0) + 1;
       scrollDecisions.set(key, visits);
-      if (key !== lastScrollDecision && visits >= (options.maxSameAction ?? 3)) {
+      if (key !== lastScrollDecision && visits >= Math.max(2, options.maxSameAction ?? 3)) {
         history.push(result);
         return done({ success: false, steps: step, reason: "stuck", history });
       }

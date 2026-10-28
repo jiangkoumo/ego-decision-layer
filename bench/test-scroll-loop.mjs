@@ -154,5 +154,63 @@ await test("control stop during reveal propagates without further observation or
   assert.equal(f.calls.dispatches, 0);
 });
 
+await test("dynamic clock/timestamp does not bypass oscillation detection or refill reveals", async () => {
+  // Pre-fix: unnormalized timestamps in pageText/targets caused endless newObservation,
+  // running all 20 steps, triggering 10 reveals despite maxReveals: 2, ending in max_steps_reached.
+  const f = fixture({ content: (_y, n) => `10:00:${String(n).padStart(2, "0")}` });
+  const r = await f.run(i => i % 2 ? "scroll_up" : "missing", { maxReveals: 2, maxSteps: 20 });
+  assert.equal(r.success, false);
+  assert.ok(f.calls.reveals <= 2, `reveals=${f.calls.reveals} should be <= 2`);
+  assert.equal(r.reason, "stuck");
+  assert.ok(r.steps < 10, `steps=${r.steps} should stop early on oscillation`);
+});
+
+await test("maxSameAction: 1 does not kill first scroll on step 1 (requires >= 2 visits)", async () => {
+  // Pre-fix: maxSameAction: 1 stopped on step 1 visit 1 with reason: "stuck".
+  // Loop detection requires at least 2 visits to establish an oscillation.
+  const f = fixture();
+  const r = await f.run(() => "scroll_down", { maxSameAction: 1, maxSteps: 4 });
+  assert.ok(r.steps >= 2, `steps=${r.steps} must survive initial visit on step 1`);
+});
+
+await test("snapshot observation mode detects scroll oscillation and isolates URL", async () => {
+  // Pre-fix: observe:"snapshot" had scrollInfo=null and urlBefore="", bypassing
+  // scroll oscillation detection and running all steps to max_steps_reached without URL isolation.
+  let y = 0, asks = 0;
+  const page = {
+    async snapshot() { return '- button "Item" [ref=1]'; },
+    async evaluate(fn, arg) {
+      if (fn?.name === "scrollInPage") { y = Math.max(0, y + arg); return { moved: true, y }; }
+      if (fn?.name === "readScrollY") return y;
+      if (String(fn).includes("readyState")) return [URL, "complete"];
+      return null;
+    },
+    async cdp() {},
+    async url() { return URL; },
+    async title() { return "List"; },
+    async waitForLoadState() {},
+  };
+  const r = await runJevAutonomousLoop(page, "find item", {
+    observe: "snapshot", enrich: false, cache: false, textModel: null, maxSteps: 10,
+    settleMode: "legacy", stepDelay: 0, onStep: () => {},
+    ask: async (_state, questions) => {
+      const answers = {};
+      for (const [head, q] of Object.entries(questions)) {
+        const keys = Object.keys(q.criteria);
+        const choice = head === "operation" ? (asks % 2 ? "scroll_up" : "scroll_down") : "none";
+        const others = keys.filter(k => k !== choice);
+        answers[head] = { choice, confidence: 0.9,
+          probabilities: Object.fromEntries(keys.map(k => [k, k === choice ? 0.9 : 0.1 / (others.length || 1)])) };
+      }
+      asks++;
+      return answers;
+    },
+  });
+  assert.equal(r.success, false);
+  assert.equal(r.reason, "stuck");
+  assert.ok(r.steps < 10, `steps=${r.steps} should detect oscillation early in snapshot mode`);
+  assert.ok(r.history[0].observationFingerprint, "observationFingerprint should be present");
+});
+
 console.log(`RESULT ${passed} PASS / ${failed} FAIL`);
 process.exitCode = failed ? 1 : 0;
