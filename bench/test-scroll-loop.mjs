@@ -1,6 +1,6 @@
 // Deterministic regressions for reveal/scroll oscillation. No browser or network.
 import assert from "node:assert/strict";
-import { runJevAutonomousLoop } from "../scripts/decider-loop.mjs";
+import { normalizeVolatileText, runJevAutonomousLoop } from "../scripts/decider-loop.mjs";
 
 const URL = "https://example.com/list";
 function fixture({ content = () => "same content", moves = true, stopAt = null, clickChanges = false } = {}) {
@@ -165,6 +165,29 @@ await test("dynamic clock/timestamp does not bypass oscillation detection or ref
   assert.ok(r.steps < 10, `steps=${r.steps} should stop early on oscillation`);
 });
 
+await test("business quantities and durations remain distinct while relative time is normalized", async () => {
+  for (const [a, b] of [["剩余 10 件", "剩余 20 件"], ["套餐 10 minutes", "套餐 20 minutes"]]) {
+    assert.notEqual(normalizeVolatileText(a), normalizeVolatileText(b));
+    const f = fixture({ content: (_y, n) => a.replace("10", String(10 * n)) });
+    const r = await f.run(i => i % 2 ? "scroll_up" : "scroll_down", { maxSteps: 12 });
+    assert.equal(r.reason, "max_steps_reached");
+    assert.equal(r.steps, 12);
+  }
+  for (const [a, b] of [["剩余 10 秒", "剩余 20 秒"], ["10 minutes ago", "20 minutes ago"]]) {
+    assert.equal(normalizeVolatileText(a), normalizeVolatileText(b));
+  }
+});
+
+await test("snapshot missing targets do not spend an unsupported reveal quota", async () => {
+  const f = fixture();
+  f.page.snapshot = async () => '- button "Item" [ref=1]';
+  const r = await f.run(() => "missing", { observe: "snapshot", enrich: false, maxSteps: 10 });
+  assert.equal(r.reason, "target_missing");
+  assert.equal(f.calls.reveals, 0);
+  assert.equal(f.logs.filter(l => l.includes("/4 次")).length, 0);
+  assert.equal(f.calls.asks, 1, "no extra ask for a reveal that cannot execute");
+});
+
 await test("maxSameAction: 1 does not kill first scroll on step 1 (requires >= 2 visits)", async () => {
   // Pre-fix: maxSameAction: 1 stopped on step 1 visit 1 with reason: "stuck".
   // Loop detection requires at least 2 visits to establish an oscillation.
@@ -176,7 +199,7 @@ await test("maxSameAction: 1 does not kill first scroll on step 1 (requires >= 2
 await test("snapshot observation mode detects scroll oscillation and isolates URL", async () => {
   // Pre-fix: observe:"snapshot" had scrollInfo=null and urlBefore="", bypassing
   // scroll oscillation detection and running all steps to max_steps_reached without URL isolation.
-  let y = 0, asks = 0;
+  let y = 0, asks = 0, currentUrl = URL;
   const page = {
     async snapshot() { return '- button "Item" [ref=1]'; },
     async evaluate(fn, arg) {
@@ -186,7 +209,7 @@ await test("snapshot observation mode detects scroll oscillation and isolates UR
       return null;
     },
     async cdp() {},
-    async url() { return URL; },
+    async url() { return currentUrl; },
     async title() { return "List"; },
     async waitForLoadState() {},
   };
@@ -210,6 +233,19 @@ await test("snapshot observation mode detects scroll oscillation and isolates UR
   assert.equal(r.reason, "stuck");
   assert.ok(r.steps < 10, `steps=${r.steps} should detect oscillation early in snapshot mode`);
   assert.ok(r.history[0].observationFingerprint, "observationFingerprint should be present");
+  currentUrl = "https://example.com/other-list";
+  const other = await runJevAutonomousLoop(page, "find item", {
+    observe: "snapshot", enrich: false, cache: false, textModel: null, maxSteps: 1,
+    settleMode: "legacy", stepDelay: 0, onStep: () => {},
+    ask: async (_state, questions) => Object.fromEntries(Object.entries(questions).map(([head, q]) => {
+      const keys = Object.keys(q.criteria);
+      const choice = head === "operation" ? "scroll_down" : "none";
+      return [head, { choice, confidence: 0.9, probabilities: Object.fromEntries(keys.map(k =>
+        [k, k === choice ? 0.9 : 0.1 / (keys.length - 1)])) }];
+    })),
+  });
+  assert.notEqual(other.history[0].observationFingerprint, r.history[0].observationFingerprint,
+    "identical snapshot content on different URLs must have different observation identities");
 });
 
 console.log(`RESULT ${passed} PASS / ${failed} FAIL`);

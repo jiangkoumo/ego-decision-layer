@@ -1965,11 +1965,11 @@ export function normalizeVolatileText(str) {
     .replace(/\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/g, "<TIMESTAMP>")
     .replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:\s*[AaPp][Mm])?\b/g, "<TIME>")
     .replace(/\b(?:clock|timer|timestamp|tick)[-_:\s]*\d+\b/gi, "<TIMER>")
-    .replace(/\b\d+\s*(?:ms|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?|mo|months?|y|years?)\s*(?:ago|left|remaining)?\b/gi, "<REL_TIME>")
+    .replace(/\b\d+\s*(?:ms|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?|mo|months?|y|years?)\s*(?:ago|left|remaining)\b/gi, "<REL_TIME>")
     .replace(/\b(?:just now|moments ago)\b/gi, "<REL_TIME>")
     .replace(/\d+\s*(?:毫秒|秒|秒钟|分|分钟|小时|天|周|月|年)\s*(?:前|后|左右)/g, "<REL_TIME>")
     .replace(/(?:刚刚|刚才|刚刚更新)/g, "<REL_TIME>")
-    .replace(/(?:倒计时|剩余时间|剩余)\s*[:：]?\s*\d+\s*(?:毫秒|秒|秒钟|分|分钟|小时|s|sec|seconds?)?/gi, "<COUNTDOWN>");
+    .replace(/(?:倒计时|剩余时间|剩余)\s*[:：]?\s*\d+\s*(?:毫秒|秒钟|秒|分钟|分|小时|seconds?|sec|s)/gi, "<COUNTDOWN>");
 }
 
 export function computeDomFingerprint(snapshot = [], options = {}) {
@@ -2603,7 +2603,8 @@ export async function runJevStep(page, goal, options = {}) {
         bump(metrics, "page.evaluate");
         const y = await page.evaluate(readScrollY);
         if (typeof y === "number" && Number.isFinite(y)) {
-          scrollInfo = { y, canScrollDown: true, canScrollUp: y > 0, viewportH: 600 };
+          // Position alone does not establish scroll boundaries or reveal support.
+          scrollInfo = { y };
         }
       } catch (err) {
         rethrowBrowserStop(err);
@@ -3367,7 +3368,8 @@ export async function runJevStep(page, goal, options = {}) {
       bump(metrics, "page.evaluate");
       const y = await page.evaluate(readScrollY);
       if (typeof y === "number" && Number.isFinite(y)) {
-        scrollInfo = { y, canScrollDown: true, canScrollUp: y > 0, viewportH: 600 };
+        // Snapshot observations do not support automatic reveal.
+        scrollInfo = { y };
       }
     } catch (err) {
       rethrowBrowserStop(err);
@@ -3741,7 +3743,8 @@ export async function runJevAutonomousLoop(page, goal, options = {}) {
         revealExhausted = true;
         noProgressStreak += 1;
       }
-      const canGo = Boolean(result.scrollInfo && (result.scrollInfo.canScrollDown || result.scrollInfo.canScrollUp));
+      const canGo = options.observe !== "snapshot" &&
+        Boolean(result.scrollInfo && (result.scrollInfo.canScrollDown || result.scrollInfo.canScrollUp));
       if (!revealExhausted && canGo && revealAttempts < (options.maxReveals ?? 4)) {
         revealAttempts += 1;
         nextReveal = {
