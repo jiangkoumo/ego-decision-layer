@@ -116,30 +116,14 @@ docs/                    demo 素材与重做脚本（banner.svg / demo.gif / ca
   丢弃未提交改动，必须已有用户明确授权；要求先展示再批准时，先给出可审阅结果。
 - 交付记录四项：已完成、实际验证结果（命令与退出码或只读检查依据）、未完成、具体阻碍。
 
-## 并行开发（仅在用户明确要求时启用）
+## 子 agent 与并行开发
 
-- 默认单 agent 完成任务；本节不授权自动启动子 agent。用户只要求只读审阅或调研时，
-  按该授权使用只读 reviewer，不必启动下述开发流程。
-- 用户要求并行开发或用 Herdr pane 开发时，主控使用 Herdr 的 worktree 与可见 pane 派活，
-  不用 subagent 插件替代；先读取 Herdr 技能并确认运行环境可用，遇阻报告。
-- 主控先为每个任务创建 GitHub Issue，写清需求、来源证据、验收方式、拟用分支与允许修改的文件；
-  推测标为「待验证」。展示 Issue 清单，用户确认后才创建 worktree、启动子 agent。
-- 一个 Issue 对应一个分支，分支名带 Issue 编号（如 `fix/12-loop`）。子 agent 开工前
-  用 `gh issue view <编号>` 读取任务；读不到或实际情况与 Issue 冲突时停止依赖该信息的工作并报告。
-- 按文件与模块拆分，最多同时 3 个任务；两个 worktree 不得修改同一文件，源文件与其生成物
-  也不能拆给不同 writer。有依赖的任务串行；共享入口、`CHANGELOG.md`、版本元数据与
-  `AGENTS.md` 留给主控统一修改。
-- 用 `herdr worktree create` 从最新且已核实的 `main` 建分支，在对应 worktree 开可见 pane，
-  用 `herdr agent start` 和 `herdr agent prompt` 启动并派活；向用户列出 Issue、pane、分支与路径。
-- 子 agent 先记录检查基线，只改允许的文件；需要扩大范围或出现 blocked 时联系主控。
-  主控及时向用户报告，不代替用户批准范围变更。
-- 子 agent 检查通过后一个任务一个 commit，message 带 `Fixes #<编号>`；不合并、不 rebase、
-  不推送。报告改动及原因、测试通过/失败/SKIP、真实行为验证、未完成或偏差与 commit hash。
-- 主控核实各报告，附每个分支的 `git log main..<分支> --oneline` 和
-  `git diff main...<分支> --stat`，提出合并顺序；用户确认后逐个合并。
-  从第二个分支起，先 rebase 到最新 `main`，重跑受影响检查后再合并。
-- 合并后将报告与 commit 评论到对应 Issue；推送和用 `herdr worktree remove` 清理 worktree、
-  删除分支仍需用户明确授权。
+通用规则见全局 `~/.pi/agent/AGENTS.md`「子 agent 与并行开发」。本仓库补充：
+
+- 源文件与其生成物不能拆给不同任务；共享文件还包括版本元数据（版本号要和 CHANGELOG 等保持一致），留给主控。
+- 子 agent 开工前跑受影响模块的检查记下基线，完成后按「开发约定」重跑必需的专项检查。
+- 子 agent 报告里分别列出测试通过、失败、SKIP，以及真实浏览器任务的验证结果。
+- 主控汇总时再附上每个分支的 `git diff main...<分支> --stat`。
 
 ## 开发约定
 
