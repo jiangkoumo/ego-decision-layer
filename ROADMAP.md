@@ -1,9 +1,9 @@
 # ego-decision-layer 演进规划（Roadmap）
 
-## 当前进度与下一阶段优先级（2026-10-26）
+## 当前进度与下一阶段优先级（2026-10-28）
 
 方向：**去宿主化，同时保持 ego lite 一等公民**。继续以原始数据、确定性验收与 fail-closed 执行护栏作为交付依据。
-当前发布为 v0.12.0：P1 与 P3 最小版在 v0.11.0 交付，P2 第二批随 v0.12.0 发布，包含 12 项受控验收与真实 Jev 双宿主测量入口；其余未交付项仍为规划，不承诺未经验证的模型能力或完成日期。
+当前发布为 v0.12.0：P1 与 P3 最小版在 v0.11.0 交付，P2 第二批随 v0.12.0 发布。尚未发布的 main 已合入有界滚动循环修复、八项真实任务 v2 与被动诊断；首轮双宿主 16 次试验为 13 次达成、错误成功 0，失败完整保留，见[测量说明](bench/live-benchmark/README.md)。其余未交付项仍为规划，不承诺未经验证的模型能力或完成日期。
 
 | 优先级 | 工作 | 验收标准与依赖 |
 | --- | --- | --- |
@@ -16,6 +16,8 @@
 | P5：失败升级 | 连续无进展或 blocked 时，打包状态交给大模型规划，再有界恢复 | 设置升级次数、总步数、时间与费用预算；区分未派发、已派发与结果未知，结果未知先复核；人工接管和执行护栏不被规划结果绕过 |
 
 ### 实施边界
+
+- **2026-10-28 main 集成已完成（未发布）**：滚动揭示额度只由已验证交互进展恢复，检测旧状态振荡，保留真实新内容与业务数量差异；snapshot 路径不再消耗未执行的 reveal 配额。新增 `--tasks v2` 显式八项集与离线诊断分析，旧 `all` 默认仍为 v1。首轮 ego 8/8、CDP 5/8，三个失败分别为 HN 模型请求 `fetch failed`、Jev / Alan Turing 搜索五步耗尽；搜索入口选取稳定性仍待解决。下一步优先复现这些失败，再扩到 30–50 项；不能把循环修复表述为搜索可靠性保证。
 
 - **P2 第二批已完成**：[Issue #14](https://github.com/jiangkoumo/ego-decision-layer/issues/14) 补齐 `no-text-source` 与 `batch-two-fields`；[Issue #15](https://github.com/jiangkoumo/ego-decision-layer/issues/15) 提供真实 Jev 双宿主测量入口。复跑受控集用 `node bench/common-benchmark/run.mjs --hosts both`；真实测量用 `node bench/live-benchmark/run.mjs --live --hosts both --tasks all --rounds 3`，原始数据与限制见 [测量说明](bench/live-benchmark/README.md)。两项均通过独立审阅，保留 CDP Wikipedia 的两次五步预算失败；下一步扩充真实任务覆盖。
 - P2 本轮不绑定引擎全面拆分或新宿主能力；保持 `scripts/decider-loop.mjs` 的稳定导出。后续模块化沿真实依赖逐步推进，每次只验证受影响部分。

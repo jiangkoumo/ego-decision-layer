@@ -1,4 +1,4 @@
-# Live Jev dual-host benchmark (P2 batch 1)
+# Live Jev dual-host benchmark
 
 This directory measures the **real** engine against **real sites** on two hosts with the
 same task manifest, budgets, engine and independent final-state verifiers:
@@ -55,8 +55,17 @@ DOM match after a timeout or a URL-only engine stop from being counted as a task
 # Offline policy tests (no browser, network or credentials)
 node bench/test-live-benchmark.mjs
 
-# Fixed first batch: cdp then ego, 3 rounds per task per host
+# Historical v1 batch: cdp then ego, 3 rounds per task per host
 node bench/live-benchmark/run.mjs --live --hosts both --tasks all --rounds 3
+
+# Explicit v2: eight tasks, one round per host; all/default still selects v1
+node bench/live-benchmark/run.mjs --live --hosts both --tasks v2 --rounds 1
+node bench/live-benchmark/run.mjs --live --hosts both --tasks v2:wiki-search --rounds 1
+
+# Passive diagnostics and offline analysis (no network for these commands)
+node bench/test-live-diagnostics.mjs
+node bench/test-live-task-set.mjs
+node bench/live-benchmark/analyze.mjs raw/live-v2-2026-10-28-integrated.json
 
 # One host / task / round (still explicit --live)
 node bench/live-benchmark/run.mjs --live --hosts cdp --tasks hn-navigation --rounds 1
@@ -87,6 +96,47 @@ a host/setup/cleanup failed; `2` usage error, missing browser/credentials, or in
   period, the trial is marked
   `unsettled` and the remaining plan entries are recorded as **`NOT_RUN`**; the next trial
   is not started. Host cleanup still runs.
+
+## Integrated v2 measurement (2026-10-28, unreleased main)
+
+Raw evidence: [`raw/live-v2-2026-10-28-integrated.json`](raw/live-v2-2026-10-28-integrated.json).
+Script revision: `cabf86dbe928f1133e1999bd24e571ae94dd975f`; the raw file records each runner/engine hash.
+Command: `EGO_JEV_NO_WIRE=1 node bench/live-benchmark/run.mjs --live --hosts both --tasks v2 --rounds 1 --out /tmp/ego-p2-v2-20261028-integrated.json`.
+The runner was launched in the background: launch exited 0, but its eventual process exit
+code was not captured. The completed report has `status: failed` (CLI mapping: exit 1).
+The original report is preserved, not replaced by retries.
+
+`p2-live-v2` includes the original HN navigation / Jev search plus HN newest, ask, show,
+jobs and Wikipedia Ada Lovelace / Alan Turing searches. Each task keeps 5 steps, 30 seconds
+and 5 logical asks. V2 additionally checks exact query, HN selected navigation and content,
+or exact Wiki heading and nonempty article content. V1 definitions and evidence remain unchanged.
+Selected task objects and their verifier contracts are preserved across both host legs.
+
+| host | verified | total trial latency median (includes failures) | logical asks / HTTP attempts | cleanup |
+| --- | ---: | ---: | ---: | --- |
+| ego | 8/8 | 1678.5 ms | 9 / 9 | TaskSpace finished, staging removed |
+| cdp | 5/8 | 3525 ms | 20 / 20 | target closed, Chrome stopped, profile removed |
+
+All 16 trials ran; 13 verified, 3 failed, 0 false successes, 0 not-run trials and 0 cleanup
+failures. CDP HN navigation failed on its first ask with `TypeError: fetch failed`
+(5019 ms rejected ask; token usage unknown). CDP Jev and Alan Turing searches exhausted
+five steps; early decisions included missing click targets and scrolling, and later search
+UI interactions did not complete within budget. The original search-entry selection issue
+remains open; loop bounds alone do not guarantee search success. Ada Lovelace used five
+asks on CDP versus one on ego. No failed trial was rerun to replace this batch.
+
+Environment: macOS arm64, Chrome `156.0.8078.73`, ego-browser `0.6.1.13`, model
+`jev-1.14.0`. Order was all CDP tasks followed by all ego tasks. This is one round per
+host/task, so the host medians are descriptive and do not establish a host speed difference
+or population success rate. The 28 fulfilled asks had median 273 ms; the rejected ask is
+reported separately, not silently discarded from outcomes. USD cost and human takeover
+remain unknown, and the failed request makes aggregate token usage unknown.
+
+Each trial now includes bounded passive diagnostics: allowlisted operation/ref choices,
+input size counts and public browser call timings. No extra model or browser calls are
+introduced. This batch had no dropped diagnostic records or recorder errors. Model and
+browser intervals can overlap; they cannot be added, and unmeasured `settleMs` stays null.
+Offline analysis also accepts historical reports and marks their absent diagnostics unknown.
 
 ## First measured batch (2026-10-26)
 
